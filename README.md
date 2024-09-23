@@ -1,2 +1,2 @@
-# Plans_GeneratorsVoltageChangeTest_Macro
-Macro for testing voltage changes for generators in an electric grid model
+# Plans_SORN_Macro
+Macro for testing voltage and reactive power changes for generators and transformers in an electric grid model
