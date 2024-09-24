@@ -24,7 +24,6 @@ var baseElementsReactPow = [], baseNodesVolt = [], baseElementsNodesPow = [];
 
 var node = element = transformer = branch = null;
 
-
 //Getting variables from config file 
 var area = config.areaId, voltage = config.minRatedVoltage, nodeIndex = config.nodeCharIndex, nodeChar = config.nodeChar;
 
@@ -48,9 +47,8 @@ for( var i = 1; i < Data.N_Nod; i++ ){
 
   node = NodArray.Get( i );
 
-  //Add to config file
-  if( stringContainsWord( node.Name, "55" ) ) continue;
-  
+  if( config.skipFakeNodes && stringContainsAfter( node.Name, "55", strip( node.Name ).length - 3 ) ) continue;
+    
   for( var j in inputArray ){
 
     if( stringContainsWord( node.Name, inputArray[ j ] ) ){
@@ -73,17 +71,8 @@ for( var i = 1; i < Data.N_Nod; i++ ){
 
 }
 
-
-//
-//TODO: Change pushing to array, so main node is added to coresponding generator 
-//
-
 //Fill elements array with valid generators and connected nodes. 
 //Also fills baseElementsReactPow with generators reactive power and baseElementsNodesPow with connected nodes power
-
-
-/*
-
 for( var i = 1; i < Data.N_Gen; i++ ){
 
   contains = false;
@@ -96,36 +85,13 @@ for( var i = 1; i < Data.N_Gen; i++ ){
   
     branch = BraArray.Find( element.TrfName );
     
-    cprintf( element.Name + ", TrfName: " + element.TrfName + ", ConnectedNode: " + node.Name );
-    
-    if( node.Name === branch.EndName ) cprintf( branch.BegName );
-    
-    else cprintf( branch.EndName );
-    
+    node = ( node.Name === branch.EndName ) ? NodArray.Find( branch.BegName ) : NodArray.Find( branch.EndName );
   }
   
-}
-
-*/
-
-for( var i = 1; i < Data.N_Gen; i++ ){
-
-  contains = false;
-
-  element = GenArray.Get( i );
-
-  node = NodArray.Get( element.NrNod );
-
   for( var j in inputArray ){
-
-    
 
     if( stringContainsWord( node.Name, inputArray[ j ] ) ){
 
-      cprintf( element.TrfName );
-          
-      cprintf( node.Name + ": " + inputArray[ j ] );
-    
       contains = true;
       
       break;
@@ -134,10 +100,10 @@ for( var i = 1; i < Data.N_Gen; i++ ){
   }
  
   //Add valid generators to arrays. Constrains:
-  //Minimal reactive power is not equal or higher than maximum reactive power, generator is connected to grid, matches area, 
+  //Minimal reactive power is not equal or higher than maximum reactive power, matches area, 
   //generator's node contains one of names from input file 
-  if( element.Qmin < element.Qmax && element.St > 0 && node.Area === area && node.Name.charAt( nodeIndex ) == nodeChar && contains ){
-
+  if( element.Qmin < element.Qmax && element.St > 0 && node.Area === area && contains ){
+  
     elements.push( [ element, node ] );
 
     baseElementsReactPow.push( element.Qg );
@@ -168,7 +134,6 @@ for( i in nodes ){
       if( node.Name === transformer.EndName ) baseElementsReactPow.push( branch.Qend );
       
       else baseElementsReactPow.push( branch.Qbeg );
-      
     }
     
   }
@@ -212,43 +177,6 @@ for( i in elements ){
   
   var element = elements[ i ][ 0 ], node = elements[ i ][ 1 ];
   
-  /*
-  //Check if generator has block transformer
-  if( g.TrfName != "" && !elements[ i ][ 2 ] ){
-
-    //Find transformer and change it's type to 11 ( without regulation )
-    var t = TrfArray.Find( g.TrfName );
-    t.Typ = 11;
-    
-    //Check if transformer name's ends with A, indicates that there are more than 1 block transformers connected to generator
-    if( g.TrfName.charAt( g.TrfName.length - 1 ) == 'A' ){
-      
-      var l = 'B';
-      //Transformer name without last char
-      var tName = g.TrfName.slice(0, -1);
-      
-      //As long as there are transformers with same name ending with next letter, then change it's type to 11 ( without regulation )
-      while( true ){
-        
-        //Try to assign a transformer to variable and transformer type to 11 ( without regulation )
-        try{
-          
-          t = TrfArray.Find( tName + l ); 
-          t.Typ = 11;
-        }
-        
-        //If t is null then exit while loop
-        catch( e ){ break; }
-        
-        //changes l to next letter by adding 1 to it's char code
-        l = String.fromCharCode ( l.charCodeAt( 0 ) + 1 );
-      }
-
-    }
-
-  }
-  */
-
   //If array element have a branch then try to switch tap up 
   if( elements[ i ][ 2 ] ){
   
@@ -362,15 +290,36 @@ function CPF(){
   if( CalcLF() != 1 ) errorThrower( "Power Flow calculation failed" );
 }
 
+function strip( string ){
+
+  var strippedString = string;
+  
+  return strippedString.replace(/(^\s+|\s+$)/g, '');
+}
+
 //Function checks if word is in a string. Word can only be matched whole
 function stringContainsWord( string, word ){
   
-  var j = 0;
+  var j = 0, cleanString = string.replace(/(^\s+|\s+$)/g, '');
 
-  for( var i = 0; i < string.length; i++ ){
+  for( var i = 0; i < cleanString.length; i++ ){
   
-    j = ( string.charAt( i ) === word.charAt( j ) ) ? j + 1 : 0;
+    j = ( cleanString.charAt( i ) === word.charAt( j ) ) ? j + 1 : 0;
+
+    if( j === word.length ) return true;
+  }
   
+  return false;
+}
+
+function stringContainsAfter( string, word, start ){
+
+  var j = 0, cleanString = string.replace(/(^\s+|\s+$)/g, '');
+
+  for( var i = start; i < cleanString.length; i++ ){
+  
+    j = ( cleanString.charAt( i ) === word.charAt( j ) ) ? j + 1 : 0;
+
     if( j === word.length ) return true;
   }
   
@@ -474,6 +423,7 @@ function iniConfigConstructor( iniPath, fso ){
     nodeCharIndex: ini.GetInt( "variable", "nodeCharIndex", 0 ),
     nodeChar: ini.GetString( "variable", "nodeChar", 'Y' ),
     changeValue: ini.GetInt( "variable", "changeValue", 1 ),
+    skipFakeNodes: ini.GetBool( "variable", "skipFakeNodes", 0 ),
 
     //Folder
     createResultsFolder: ini.GetBool( "folder", "createResultsFolder", 0 ),
@@ -507,6 +457,7 @@ function iniConfigConstructor( iniPath, fso ){
   ini.WriteInt( "variable", "nodeCharIndex", conf.nodeCharIndex );
   ini.WriteString( "variable", "nodeChar", conf.nodeChar );
   ini.WriteInt( "variable", "changeValue", conf.changeValue );
+  ini.WriteBool( "variable", "skipFakeNodes", conf.skipFakeNodes );
 
   //Folder
   ini.WriteBool( "folder", "createResultsFolder", conf.createResultsFolder );
