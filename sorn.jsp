@@ -1,7 +1,3 @@
-//
-//TODO skip nodes ending on 55 eg. GBL455, not real nodes
-//
-
 //Location of folder where config file is located
 var homeFolder = "C:\\Users\\lukas\\Documents\\Github\\Plans_SORN_Macro\\files";
 
@@ -148,32 +144,14 @@ var file2 = createFile( "V", config, fso );
 file1.Write( "Elements;Old U_G / Tap;New U_G / Tap;" );
 file2.Write( "Elements;Old U_G / Tap;New U_G / Tap;" );
 
-var temp = "Base;X;X;";
+writeDataToFile( file1, elements, baseElementsReactPow );
 
-for( i in elements ){
-
-  file1.Write( elements[ i ][ 0 ].Name + ";" );
-
-  temp += roundTo( baseElementsReactPow[ i ], 2 ) + ";";
-}
-
-file1.WriteLine( "\n" + temp );
-
-temp = "Base;X;X;";
-
-for( i in nodes ){
-
-  file2.Write( nodes[ i ].Name + ";" );
-
-  temp += roundTo( baseNodesVolt[ i ], 2 ) + ";";
-}
-
-file2.WriteLine( "\n" + temp );
+writeDataToFile( file2, nodes, baseNodesVolt );
 
 //Trying to save file before any change on transformers and connected nodes
 if( SaveTempBIN( tmpFile ) < 1 ) errorThrower( "Unable to create temporary file" );
 
-for( i in elements ){
+for( i in elements ){ 
   
   var element = elements[ i ][ 0 ], node = elements[ i ][ 1 ];
   
@@ -335,6 +313,22 @@ function elementInArrayByName( array, elementName ){
   }
 
   return false;
+}
+
+function writeDataToFile( file, objectArray, dataArray ){
+
+  var text = "Base;X;X;";
+  
+  for( i in objectArray ){
+  
+    if( objectArray[ i ][ 0 ] ) file.Write( objectArray[ i ][ 0 ].Name + ";" );
+
+    else file.Write( objectArray[ i ].Name + ";" );
+    
+    text += roundTo( dataArray[ i ], 2 ) + ";";
+  }
+
+  file.WriteLine( "\n" + text );
 }
 
 //Function takes config object and depending on it's config creates folder in specified location. 
