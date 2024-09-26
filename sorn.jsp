@@ -42,13 +42,14 @@ for( var i = 1; i < Data.N_Nod; i++ ){
   contains = false;
 
   node = NodArray.Get( i );
-
-  if( config.skipFakeNodes && stringContainsAfter( node.Name, "55", strip( node.Name ).length - 3 ) ) continue;
+  
+  //If skip fake nodes is set in config, then check if node ends with 55
+  if( config.skipFakeNodes && stringContainsAfter( node.Name, "55", strip( node.Name ).length - 2 ) ) continue;
     
   for( var j in inputArray ){
 
-    if( stringContainsWord( node.Name, inputArray[ j ] ) ){
-      
+    if( stringContainsWord( strip( node.Name ), inputArray[ j ] ) ){
+           
       contains = true;
       
       break;
@@ -86,7 +87,7 @@ for( var i = 1; i < Data.N_Gen; i++ ){
   
   for( var j in inputArray ){
 
-    if( stringContainsWord( node.Name, inputArray[ j ] ) ){
+    if( stringContainsWord( strip( node.Name ), inputArray[ j ] ) ){
 
       contains = true;
       
@@ -110,7 +111,7 @@ for( var i = 1; i < Data.N_Gen; i++ ){
 }
 
 //Add valid transformers to arrays with coresponding node and branch. Constrains:
-//Transformer must be connected to node from nodes array, have more than 1 tap, not already been in elements array
+//Transformer must be connected to node from nodes array, have more than 1 tap, not already in elements array
 for( i in nodes ){
 
   node = nodes[ i ];
@@ -144,8 +145,11 @@ var file2 = createFile( "V", config, fso );
 file1.Write( "Elements;Old U_G / Tap;New U_G / Tap;" );
 file2.Write( "Elements;Old U_G / Tap;New U_G / Tap;" );
 
+
+//Writes for each element it's node react power 
 writeDataToFile( file1, elements, baseElementsReactPow );
 
+//Writes for each element it's node voltage
 writeDataToFile( file2, nodes, baseNodesVolt );
 
 //Trying to save file before any change on transformers and connected nodes
@@ -186,6 +190,7 @@ for( i in elements ){
 
     react = null;
 
+    //Check if element have a branch, if true use reactive power from matching branch end
     if( elements[ j ][ 2 ] ){
 
       react = ( elements[ j ][ 0 ].begName === elements[ j ][ 1 ].Name ) ? elements[ j ][ 2 ].Qbeg : elements[ j ][ 2 ].Qend;
@@ -215,7 +220,7 @@ for( i in elements ){
 }
 
 //Loading original model
-ReadTempBIN( tmpOgFile );
+ReadTempBIN( tmpOgFile ); 
 
 //Removing temporary binary files
 fso.DeleteFile( tmpFile );
@@ -225,8 +230,10 @@ fso.DeleteFile( tmpOgFile );
 file1.Close();
 file2.Close();
 
+//Gets program working duration and shows it in a message box
+//Working duration dosen't work if program starts and ends in a different day due to lack of futher date checking 
 time = getTime() - time;
-cprintf( "Time Elapsed: "+ time ); 
+MsgBox( "Task completed in " + formatTime( time ), 0 | 64, "Task completed" );
 
 //Function uses JS Math.round, takes value and returns rounded value to specified decimals 
 function roundTo( value, precision ){
@@ -268,6 +275,7 @@ function CPF(){
   if( CalcLF() != 1 ) errorThrower( "Power Flow calculation failed" );
 }
 
+//Function takes string and returns it without whitespaces
 function strip( string ){
 
   var strippedString = string;
@@ -275,33 +283,25 @@ function strip( string ){
   return strippedString.replace(/(^\s+|\s+$)/g, '');
 }
 
-//Function checks if word is in a string. Word can only be matched whole
-function stringContainsWord( string, word ){
-  
-  var j = 0, cleanString = string.replace(/(^\s+|\s+$)/g, '');
+//Function checks if searched word is in a string, can change from where to start checking for match
+function stringContainsAfter( string, word, start ){
 
-  for( var i = 0; i < cleanString.length; i++ ){
-  
-    j = ( cleanString.charAt( i ) === word.charAt( j ) ) ? j + 1 : 0;
+  var j = 0;
 
-    if( j === word.length ) return true;
+  for( var i = start; i < string.length; i++ ){
+  
+    j = ( string.charAt( i ) === word.charAt( j ) ) ? j + 1 : 0;
+
+    if( j === word.length ) return true; 
   }
   
   return false;
 }
 
-function stringContainsAfter( string, word, start ){
-
-  var j = 0, cleanString = string.replace(/(^\s+|\s+$)/g, '');
-
-  for( var i = start; i < cleanString.length; i++ ){
+//Function checks if searched word is in a string
+function stringContainsWord( string, word ){
   
-    j = ( cleanString.charAt( i ) === word.charAt( j ) ) ? j + 1 : 0;
-
-    if( j === word.length ) return true;
-  }
-  
-  return false;
+  return stringContainsAfter( string, word, 0 );
 }
 
 //Function gets each element's name from 2D array and compares it to elementName 
@@ -315,6 +315,7 @@ function elementInArrayByName( array, elementName ){
   return false;
 }
 
+//Function writes to specifed file objects names and corresponding data
 function writeDataToFile( file, objectArray, dataArray ){
 
   var text = "Base;X;X;";
@@ -509,9 +510,26 @@ function getCurrentDate(){
   return current.getFullYear() + "-" + formatedDateArray[ 0 ] + "-" + formatedDateArray[ 1 ] + "--" + formatedDateArray[ 2 ] + "-" + formatedDateArray[ 3 ] + "-" + formatedDateArray[ 4 ];
 }
 
+//Function returns current time in seconds 
 function getTime(){
   
   var current = new Date();
   
   return current.getHours() * 3600 + current.getMinutes() * 60 + current.getSeconds();
+}
+
+//Function takes time in seconds and return time in HH:MM:SS format
+function formatTime( time ){
+
+  var hours = minutes = 0;
+
+  hours = Math.floor( time / 3600 );
+
+  time -= hours * 3600;
+
+  minutes = Math.floor( time / 60 );
+
+  time -= minutes * 60;
+
+  return ( '0' + hours ).slice( -2 ) + ":" + ( '0' + minutes ).slice( -2 ) + ":" + ( '0' + time ).slice( -2 );
 }
