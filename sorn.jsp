@@ -1,15 +1,15 @@
-//BEFORE RUNNING MAKE SURE TO CHANGE homeFolder VARIABLE TO LOCATION OF CONFIGURATION FILE
+//BEFORE RUNNING MAKE SURE TO CHANGE homeFolder VARIABLE TO LOCATION OF THE CONFIGURATION FILE
 var homeFolder = "C:\\Users\\lukas\\Documents\\Github\\Plans_SORN_Macro\\files";
 
 /*  
   Description:
   
   Macro gets nodes' name from input file, then searches through nodes to find connected transformers and generators ( directly or through Y - node ).
-  Before any changes original values for each nodes and elements are written with their name into both output files. 
+  Before any changes original values for each nodes and elements are written with their names into both output files. 
   First file is for voltage change results, second is for reactive power changes.    
   Then for each found generator, increases it's set voltage by value from configuration file and 
-  writes it's new value with new calculated values of each elements/nodes into files.       
-  Similarly for each transformers except changeing tap by one to increase it's voltage. 
+  writes it's new value with new calculated values of each element/node into files.       
+  Similarly for each transformer except changeing tap by one to increase it's voltage. 
   After succesfully writing results into files, macro shows in a message window time it took to be done.
 
   Writing nodes names in an input file:
@@ -17,11 +17,11 @@ var homeFolder = "C:\\Users\\lukas\\Documents\\Github\\Plans_SORN_Macro\\files";
   E.g. we have these nodes: ABC111, ABC222, ABC555, ABC444, CAB123, BAC234, BAC235, BAC124, ABCA123, CABC345, ZABC111
   If we want all nodes containing name "ABC" and "BAC" then in input file we can write: 
   
-  ABC, BAC
+  ABC, bac
   
   White spaces dosen't matter, macro splits input by ',' if we forget to add ',' between searched strings:
   
-  ABC BAC 
+  ABC bac 
   
   Macro will search for nodes containing "ABCBAC"
   If we want to find nodes ABC111, ABC222 and only them, then we can write:
@@ -32,7 +32,7 @@ var homeFolder = "C:\\Users\\lukas\\Documents\\Github\\Plans_SORN_Macro\\files";
   In configuration file there are options that can block finding some nodes:
   
   areaId - nodes only from this area will be found, 
-  minRatedVoltage - node that are rated less than specified will not be found,
+  minRatedVoltage - nodes that are rated less than specified will not be found,
   nodeCharIndex and nodeChar - this options are for skiping nodes connecting generators to main nodes e.g. YABC123,
   skipFakeNodes - nodes that don't end on 55 which due to model implementation in plans don't have real representation
 */
@@ -65,14 +65,14 @@ setPowerFlowSettings( config );
 //Calculate power flow, if fails throw error 
 CPF();
 
-//Try to read file from location specified in configuration file, then make array from file and close it
+//Try to read file from location specified in configuration file, then make array from file and close that file
 var inputFile = readFile( config, fso );
 var inputArray = getInputArray( inputFile );
 inputFile.close();
 
 var contains = null;
 
-//Fill node and baseNodesVolt arrays with nodes that matches names from input file
+//Fill node and baseNodesVolt arrays with nodes that matches names from input array
 for( var i = 1; i < Data.N_Nod; i++ ){
 
   contains = false;
@@ -94,7 +94,7 @@ for( var i = 1; i < Data.N_Nod; i++ ){
   }
 
   //Add node to both arrays that fulfills all conditions:
-  //matching area, connected, not generator's node, higher voltage setpoint than specified in configure file, node contains one of names from input file
+  //matching area ( if not set to 0 ), connected, not generator's node, higher voltage setpoint than specified in configure file, node contains one of names from input file
   if( ( node.Area === area || node.Area <= 0 ) && node.St > 0 && node.Name.charAt( nodeIndex ) != nodeChar && node.Vn >= voltage && contains ){ 
     
     nodes.push( node );
@@ -191,6 +191,7 @@ writeDataToFile( file2, nodes, baseNodesVolt );
 //Trying to save file before any change on transformers and connected nodes
 if( SaveTempBIN( tmpFile ) < 1 ) errorThrower( "Unable to create temporary file" );
 
+//For each element make some change depending on type of elemenet, then write results into result files
 for( i in elements ){ 
   
   var element = elements[ i ][ 0 ], node = elements[ i ][ 1 ];
@@ -512,7 +513,7 @@ function iniConfigConstructor( iniPath, fso ){
   return conf;
 }
 
-//Function gets file and takes each line into a array and after finding "," character pushes array into other array
+//Function gets file and takes each line into a array and after finding "," character pushes array into other array. Returns string array
 function getInputArray( file ){
 
   var array = []; 
@@ -554,7 +555,7 @@ function getTime(){
   return current.getHours() * 3600 + current.getMinutes() * 60 + current.getSeconds();
 }
 
-//Function takes time in seconds and return time in HH:MM:SS format
+//Function takes time in seconds and returns time in HH:MM:SS format
 function formatTime( time ){
 
   var hours = minutes = 0;
