@@ -12,7 +12,7 @@ var homeFolder = "C:\\Users\\lukas\\Documents\\Github\\Plans_SORN_Macro\\files";
   Similarly for each transformer except changeing tap by one to increase it's voltage. 
   After succesfully writing results into files, macro shows in a message window time it took to be done.
 
-  Writing nodes names in an input file:
+  Writing nodes names in an input file ( search is outdated, now uses regex ) :
   
   E.g. we have these nodes: ABC111, ABC222, ABC555, ABC444, CAB123, BAC234, BAC235, BAC124, ABCA123, CABC345, ZABC111
   If we want all nodes containing name "ABC" and "BAC" then in input file we can write: 
@@ -80,17 +80,17 @@ for( var i = 1; i < Data.N_Nod; i++ ){
   node = NodArray.Get( i );
   
   //If skip fake nodes is set in config, then check if node ends with 55
-  if( config.skipFakeNodes && stringContainsAfter( node.Name, "55", strip( node.Name ).length - 2 ) ) continue;
+  if( config.skipFakeNodes && stringContainsRegex( strip( node.Name ), "55$" ) ) continue;
     
   for( var j in inputArray ){
 
-    if( stringContainsWord( strip( node.Name ), inputArray[ j ] ) ){
+    if( stringContainsRegex( strip( node.Name ), "^" + inputArray[ j ] ) ){
            
       contains = true;
       
       break;
     }
-
+    
   }
 
   //Add node to both arrays that fulfills all conditions:
@@ -123,8 +123,8 @@ for( var i = 1; i < Data.N_Gen; i++ ){
   
   for( var j in inputArray ){
 
-    if( stringContainsWord( strip( node.Name ), inputArray[ j ] ) ){
-
+    if( stringContainsRegex( strip( node.Name ), "^" + inputArray[ j ] ) ){
+    
       contains = true;
       
       break;
@@ -320,6 +320,18 @@ function strip( string ){
   return strippedString.replace(/(^\s+|\s+$)/g, '');
 }
 
+//Function checks if searched regex is in a string and returns true/false
+function stringContainsRegex( string, regex ){
+
+  //Regex flags for Multiline and Insensitive
+  var temp = new RegExp( regex , "mi" );  
+    
+  if( string.search( temp ) > -1 ) return true;
+  
+  return false;
+}
+
+/*
 //Function checks if searched word is in a string, can change from where to start checking for match
 function stringContainsAfter( string, word, start ){
 
@@ -340,6 +352,7 @@ function stringContainsWord( string, word ){
   
   return stringContainsAfter( string, word, 0 );
 }
+*/
 
 //Function gets each element's name from 2D array and compares it to elementName 
 function elementInArrayByName( array, elementName ){
