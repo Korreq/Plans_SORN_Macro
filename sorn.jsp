@@ -4,37 +4,45 @@ var homeFolder = "C:\\Users\\lukas\\Documents\\Github\\Plans_SORN_Macro\\files";
 /*  
   Description:
   
-  Macro gets nodes' name from input file, then searches through nodes to find connected transformers and generators ( directly or through Y - node ).
-  Before any changes original values for each nodes and elements are written with their names into both output files. 
-  First file is for voltage change results, second is for reactive power changes.    
-  Then for each found generator, increases it's set voltage by value from configuration file and 
-  writes it's new value with new calculated values of each element/node into files.       
-  Similarly for each transformer except changeing tap by one to increase it's voltage. 
-  After succesfully writing results into files, macro shows in a message window time it took to be done.
+    Macro gets nodes' name from input file, then searches through nodes to find connected transformers and generators ( directly or through Y - node ).
+    Before any changes original values for each nodes and elements are written with their names into both output files. 
+    First file is for voltage change results, second is for reactive power changes.    
+    Then for each found generator, increases it's set voltage by value from configuration file and 
+    writes it's new value with new calculated values of each element/node into files.       
+    Similarly for each transformer except changeing tap by one to increase it's voltage. 
+    After succesfully writing results into files, macro shows in a message window time it took to be done.
 
-  Writing nodes names in an input file ( search is outdated, now uses regex ) :
+  Writing nodes names in an input file:
   
-  E.g. we have these nodes: ABC111, ABC222, ABC555, ABC444, CAB123, BAC234, BAC235, BAC124, ABCA123, CABC345, ZABC111
-  If we want all nodes containing name "ABC" and "BAC" then in input file we can write: 
+    Nodes are searched by function using regex. It matches input from start of string and is case-insensitive.
+    E.g. we have these nodes: ABC111, ABC222, ABC555, BAC234, BAC235, BAC124, ABCA123, CABC345, ZABC111.
+    If we want all nodes containing name "ABC" and "BAC" then in input file we can write: 
   
-  ABC, bac
+    ABC, bac
   
-  White spaces dosen't matter, macro splits input by ',' if we forget to add ',' between searched strings:
+    White spaces dosen't matter, macro splits input by ',' if we forget to add ',' between searched strings:
   
-  ABC bac 
+    ABC bac 
   
-  Macro will search for nodes containing "ABCBAC"
-  If we want to find nodes ABC111, ABC222 and only them, then we can write:
+    Macro will search for nodes containing "ABCBAC".
+    If we want to find nodes ABC111, ABC222 and only them, then we can write:
   
-  ABC111, ABC222
+    ABC111, ABC222
   
-  Macro will only find ABC111, ABC222 and ZABC111 nodes and not ABC555, ABC444
-  In configuration file there are options that can block finding some nodes:
+    Macro will only find ABC111, ABC222 nodes.
   
-  areaId - nodes only from this area will be found, 
-  minRatedVoltage - nodes that are rated less than specified will not be found,
-  nodeCharIndex and nodeChar - this options are for skiping nodes connecting generators to main nodes e.g. YABC123,
-  skipFakeNodes - nodes that don't end on 55 which due to model implementation in plans don't have real representation
+    Thakns to regex support we are able to find more specific nodes. E.g. we want to find all BAC nodes ending with 4:
+  
+    bac..4
+  
+    Will find nodes BAC234 and BAC124.
+  
+    In configuration file there are options that can block finding some nodes:
+  
+      areaId - nodes only from this area will be found, 
+      minRatedVoltage - nodes that are rated less than specified will not be found,
+      nodeCharIndex and nodeChar - this options are for skiping nodes connecting generators to main nodes e.g. YABC123,
+      skipFakeNodes - nodes that end on 55 which due to model implementation in plans don't have real representation
 */
 
 //Creating file operation object
@@ -80,18 +88,10 @@ for( var i = 1; i < Data.N_Nod; i++ ){
   node = NodArray.Get( i );
   
   //If skip fake nodes is set in config, then check if node ends with 55
-  if( config.skipFakeNodes && stringContainsRegex( strip( node.Name ), "55$" ) ) continue;
+  if( config.skipFakeNodes && isStringMatchingRegex( strip( node.Name ), "55$" ) ) continue;
     
-  for( var j in inputArray ){
-
-    if( stringContainsRegex( strip( node.Name ), "^" + inputArray[ j ] ) ){
-           
-      contains = true;
-      
-      break;
-    }
-    
-  }
+  //Checks if node's name matches one of the inputArray's regexes
+  contains = isStringMatchingRegexArray( strip( node.Name ), inputArray );
 
   //Add node to both arrays that fulfills all conditions:
   //matching area ( if not set to 0 ), connected, not generator's node, higher voltage setpoint than specified in configure file, node contains one of names from input file
@@ -121,17 +121,9 @@ for( var i = 1; i < Data.N_Gen; i++ ){
     node = ( node.Name === branch.EndName ) ? NodArray.Find( branch.BegName ) : NodArray.Find( branch.EndName );
   }
   
-  for( var j in inputArray ){
+  //Checks if node's name matches one of the inputArray's regexes
+  contains = isStringMatchingRegexArray( strip( node.Name ), inputArray );
 
-    if( stringContainsRegex( strip( node.Name ), "^" + inputArray[ j ] ) ){
-    
-      contains = true;
-      
-      break;
-    }
-
-  }
- 
   //Add valid generators to arrays. Constrains:
   //Minimal reactive power is not equal or higher than maximum reactive power, matches area, 
   //generator's node contains one of names from input file 
@@ -156,7 +148,7 @@ for( i in nodes ){
 
     transformer = TrfArray.Get( j );
     
-    if( ( node.Name == transformer.EndName || node.Name == transformer.BegName ) && !elementInArrayByName( elements, transformer.Name ) && transformer.Lstp != 1 ){
+    if( ( node.Name == transformer.EndName || node.Name == transformer.BegName ) && !isElementInArrayByName( elements, transformer.Name ) && transformer.Lstp != 1 ){
 
       branch = BraArray.Find( transformer.Name );
 
@@ -320,47 +312,29 @@ function strip( string ){
   return strippedString.replace(/(^\s+|\s+$)/g, '');
 }
 
-//Function checks if searched regex is in a string and returns true/false
-function stringContainsRegex( string, regex ){
+//Function checks if string matches regex and returns true/false
+function isStringMatchingRegex( string, regex ){
 
   //Regex flags for Multiline and Insensitive
-  var temp = new RegExp( regex , "mi" );  
+  var regexExpression = new RegExp( regex , "mi" );  
     
-  if( string.search( temp ) > -1 ) return true;
+  if( string.search( regexExpression ) > -1 ) return true;
   
   return false;
 }
 
-/*
-//Function checks if searched word is in a string, can change from where to start checking for match
-function stringContainsAfter( string, word, start ){
+//Function checks if string matches any of regexes in an array and returns true/false
+function isStringMatchingRegexArray( string, array ){
 
-  var j = 0;
+  for( var i in array ) if( isStringMatchingRegex( string, "^" + array[ i ] ) ) return true;
 
-  for( var i = start; i < string.length; i++ ){
-  
-    j = ( string.charAt( i ) === word.charAt( j ) ) ? j + 1 : 0;
-
-    if( j === word.length ) return true; 
-  }
-  
   return false;
 }
-
-//Function checks if searched word is in a string
-function stringContainsWord( string, word ){
-  
-  return stringContainsAfter( string, word, 0 );
-}
-*/
 
 //Function gets each element's name from 2D array and compares it to elementName 
-function elementInArrayByName( array, elementName ){
+function isElementInArrayByName( array, elementName ){
 
-  for( i in array ){
-  
-    if(array[ i ][ 0 ].Name === elementName) return true;
-  }
+  for( i in array ) if(array[ i ][ 0 ].Name === elementName) return true;
 
   return false;
 }
