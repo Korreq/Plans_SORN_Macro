@@ -40,3 +40,4 @@ Writing nodes names in an input file:
       minRatedVoltage - nodes that are rated less than specified will not be found,
       nodeCharIndex and nodeChar - this options are for skiping nodes connecting generators to main nodes e.g. YABC123,
       skipFakeNodes - nodes that end on 55 which due to model implementation in plans don't have real representation
+
