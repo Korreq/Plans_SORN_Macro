@@ -62,7 +62,7 @@ var nodes = [], elements = [];
 
 var baseElementsReactPow = [], baseNodesVolt = [], baseElementsNodesPow = [];
 
-var node = element = transformer = branch = null;
+var node = element = transformer = branch = contains = null;
 
 //Getting variables from config file 
 var area = config.areaId, voltage = config.minRatedVoltage, nodeIndex = config.nodeCharIndex, nodeChar = config.nodeChar;
@@ -78,12 +78,8 @@ var inputFile = readFile( config, fso );
 var inputArray = getInputArray( inputFile );
 inputFile.close();
 
-var contains = null;
-
 //Fill node and baseNodesVolt arrays with nodes that matches names from input array
 for( var i = 1; i < Data.N_Nod; i++ ){
-
-  contains = false;
 
   node = NodArray.Get( i );
   
@@ -95,8 +91,9 @@ for( var i = 1; i < Data.N_Nod; i++ ){
 
   //Add node to both arrays that fulfills all conditions:
   //matching area ( if not set to 0 ), connected, not generator's node, higher voltage setpoint than specified in configure file, node contains one of names from input file
-  if( ( node.Area === area || node.Area <= 0 ) && node.St > 0 && node.Name.charAt( nodeIndex ) != nodeChar && node.Vn >= voltage && contains ){ 
-    
+  //if( ( node.Area === area || node.Area <= 0 ) && node.St > 0 && node.Name.charAt( nodeIndex ) != nodeChar && node.Vn >= voltage && contains ){ 
+  if( ( node.Area === area || node.Area <= 0 ) && node.St > 0 && node.Vn >= voltage && contains ){ 
+      
     nodes.push( node );
     
     baseNodesVolt.push( node.Vi );
@@ -107,8 +104,6 @@ for( var i = 1; i < Data.N_Nod; i++ ){
 //Fill elements array with valid generators and connected nodes. 
 //Also fills baseElementsReactPow with generators reactive power and baseElementsNodesPow with connected nodes power
 for( var i = 1; i < Data.N_Gen; i++ ){
-
-  contains = false;
 
   element = GenArray.Get( i );
 
@@ -125,9 +120,9 @@ for( var i = 1; i < Data.N_Gen; i++ ){
   contains = isStringMatchingRegexArray( strip( node.Name ), inputArray );
 
   //Add valid generators to arrays. Constrains:
-  //Minimal reactive power is not equal or higher than maximum reactive power, matches area, 
+  //Minimal reactive power is not equal or higher than maximum reactive power, matches area ( if not set to 0 ), 
   //generator's node contains one of names from input file 
-  if( element.Qmin < element.Qmax && element.St > 0 && node.Area === area && contains ){
+  if( element.Qmin < element.Qmax && element.St > 0 && ( node.Area === area || node.Area <= 0 ) && contains ){
   
     elements.push( [ element, node ] );
 
@@ -165,20 +160,17 @@ for( i in nodes ){
 
 }
 
-//Create result files and folder with settings from a config file
-var file1 = createFile( "Q", config, fso );
-var file2 = createFile( "V", config, fso );
+//Create result files and folder using settings from a config file
+var files = [ createFile( "Q", config, fso ), createFile( "V", config, fso ) ];
 
 //Write headers and base values for each element/node to coresponding file 
-file1.Write( "Elements;Old U_G / Tap;New U_G / Tap;" );
-file2.Write( "Elements;Old U_G / Tap;New U_G / Tap;" );
-
+for( var i = 0; i < files.length; i++ ) files[ i ].Write( "Elements;Old U_G / Tap;New U_G / Tap;" );
 
 //Writes for each element it's node react power 
-writeDataToFile( file1, elements, baseElementsReactPow );
+writeDataToFile( files[ 0 ], elements, baseElementsReactPow );
 
 //Writes for each element it's node voltage
-writeDataToFile( file2, nodes, baseNodesVolt );
+writeDataToFile( files[ 1 ], nodes, baseNodesVolt );
 
 //Trying to save file before any change on transformers and connected nodes
 if( SaveTempBIN( tmpFile ) < 1 ) errorThrower( "Unable to create temporary file" );
@@ -186,7 +178,7 @@ if( SaveTempBIN( tmpFile ) < 1 ) errorThrower( "Unable to create temporary file"
 //For each element make some change depending on type of elemenet, then write results into result files
 for( i in elements ){ 
   
-  var element = elements[ i ][ 0 ], node = elements[ i ][ 1 ];
+  element = elements[ i ][ 0 ], node = elements[ i ][ 1 ];
   
   //If array element have a branch then try to switch tap up 
   if( elements[ i ][ 2 ] ){
@@ -196,28 +188,24 @@ for( i in elements ){
     else if( ( element.TapLoc === 0 && element.Stp0 > 1 ) ) element.Stp0--;  
   }
 
-  else{
-
-    //get set value from config file and add it to node's voltage
-    var value = config.changeValue;
-    
-    node.Vs += value;
-  }
-
-  //Calculate power flow, if fails try to load original model and throw error 
-  if( CalcLF() != 1 ) saveErrorThrower( "Power Flow calculation failed", tmpOgFile );
-
-  //Write element's name, it's base connected node power / tap number and new connected node power / tap number
-  if( elements[ i ][ 2 ] ) file1.Write( element.Name + ";" + baseElementsNodesPow[ i ] + ";" + element.Stp0 + ";" );
+  //get set value from config file and add it to node's voltage  
+  else node.Vs += config.changeValue;
   
-  else file1.Write( element.Name + ";" + roundTo( baseElementsNodesPow[ i ], 2 ) + ";" + roundTo( node.Vs, 2 ) + ";" );
+  //Calculate power flow, if fails try to load original model and throw error 
+  if( CalcLF() != 1 ) safeErrorThrower( "Power Flow calculation failed", tmpOgFile );
+
+  for( var j = 0; j < files.length; j++ ){
+
+    //Write element's name, it's base connected node power / tap number and new connected node power / tap number
+    if( elements[ i ][ 2 ] ) files[ j ].Write( element.Name + ";" + baseElementsNodesPow[ i ] + ";" + element.Stp0 + ";" );
+  
+    else files[ j ].Write( element.Name + ";" + roundTo( baseElementsNodesPow[ i ], 2 ) + ";" + roundTo( node.Vs, 2 ) + ";" );
+  }
 
   var react = null; 
   
   //Write for each element it's new reactive power
   for( j in elements ){
-
-    react = null;
 
     //Check if element have a branch, if true use reactive power from matching branch end
     if( elements[ j ][ 2 ] ){
@@ -227,22 +215,17 @@ for( i in elements ){
 
     else react = elements[ j ][ 0 ].Qg;
   
-    file1.Write( roundTo( react, 2 ) + ";" );
+    files[ 0 ].Write( roundTo( react, 2 ) + ";" );
   }
   
   //Add end line character to file
-  file1.WriteLine("");
+  files[ 0 ].WriteLine("");
 
-  //Write element's name, it's base connected node power / tap number and new connected node power / tap number
-  if( elements[ i ][ 2 ] ) file2.Write( element.Name + ";" + baseElementsNodesPow[ i ] + ";" + element.Stp0 + ";" );
-  
-  else file2.Write( element.Name + ";" + roundTo( baseElementsNodesPow[ i ], 2 ) + ";" + roundTo( node.Vs, 2 ) + ";" );
-  
   //Write for each node it's new voltage
-  for( j in nodes ) file2.Write( roundTo( nodes[ j ].Vi, 2 ) + ";" );
+  for( j in nodes ) files[ 1 ].Write( roundTo( nodes[ j ].Vi, 2 ) + ";" );
 
   //Add end line character to file
-  file2.WriteLine("");
+  files[ 1 ].WriteLine("");
 
   //Load model without any changes to transformators
   ReadTempBIN( tmpFile );
@@ -256,13 +239,11 @@ fso.DeleteFile( tmpFile );
 fso.DeleteFile( tmpOgFile );
 
 //Closing result files
-file1.Close();
-file2.Close();
+for( var i = 0; i < files.length; i++ ) files[ i ].Close();
 
 //Gets program working duration and shows it in a message box
 //Working duration dosen't work if program starts and ends in a different day due to lack of futher date checking 
-time = getTime() - time;
-MsgBox( "Task completed in " + formatTime( time ), 0 | 64, "Task completed" );
+MsgBox( "Task completed in " + formatTime( getTime() - time ), 0 | 64, "Task completed" );
 
 //Function uses JS Math.round, takes value and returns rounded value to specified decimals 
 function roundTo( value, precision ){
@@ -281,7 +262,7 @@ function setPowerFlowSettings( config ){
 }
 
 //Function try to load original file before throwing an error
-function saveErrorThrower( message, binPath ){
+function safeErrorThrower( message, binPath ){
 
   try{ ReadTempBIN( binPath ); }
   
