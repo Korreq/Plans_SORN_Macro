@@ -1,9 +1,49 @@
-//
-//TODO skip nodes ending on 55 eg. GBL455, not real nodes
-//
+//BEFORE RUNNING MAKE SURE TO CHANGE homeFolder VARIABLE TO LOCATION OF THE CONFIGURATION FILE
+var homeFolder = "C:\\Users\\lukas\\Documents\\Github\\Plans_SORN_Macro\\files";
 
-//Location of folder where config file is located
-var homeFolder = "C:\\Users\\lukas\\Documents\\Github\\Plans_GeneratorsVoltageChangeTest_Macro\\files";
+/*  
+  Description:
+  
+    Macro gets nodes' name from input file, then searches through nodes to find connected transformers and generators ( directly or through Y - node ).
+    Before any changes original values for each nodes and elements are written with their names into both output files. 
+    First file is for voltage change results, second is for reactive power changes.    
+    Then for each found generator, increases it's set voltage by value from configuration file and 
+    writes it's new value with new calculated values of each element/node into files.       
+    Similarly for each transformer except changeing tap by one to increase it's voltage. 
+    After succesfully writing results into files, macro shows in a message window time it took to be done.
+
+  Writing nodes names in an input file:
+  
+    Nodes are searched by function using regex. It matches input from start of string and is case-insensitive.
+    E.g. we have these nodes: ABC111, ABC222, ABC555, BAC234, BAC235, BAC124, ABCA123, CABC345, ZABC111.
+    If we want all nodes containing name "ABC" and "BAC" then in input file we can write: 
+  
+    ABC, bac
+  
+    White spaces dosen't matter, macro splits input by ',' if we forget to add ',' between searched strings:
+  
+    ABC bac 
+  
+    Macro will search for nodes containing "ABCBAC".
+    If we want to find nodes ABC111, ABC222 and only them, then we can write:
+  
+    ABC111, ABC222
+  
+    Macro will only find ABC111, ABC222 nodes.
+  
+    Thakns to regex support we are able to find more specific nodes. E.g. we want to find all BAC nodes ending with 4:
+  
+    bac..4
+  
+    Will find nodes BAC234 and BAC124.
+  
+    In configuration file there are options that can block finding some nodes:
+  
+      areaId - nodes only from this area will be found, 
+      minRatedVoltage - nodes that are rated less than specified will not be found,
+      nodeCharIndex and nodeChar - this options are for skiping nodes connecting generators to main nodes e.g. YABC123,
+      skipFakeNodes - nodes that end on 55 which due to model implementation in plans don't have real representation
+*/
 
 //Creating file operation object
 var fso = new ActiveXObject( "Scripting.FileSystemObject" );
@@ -22,6 +62,8 @@ var nodes = [], elements = [];
 
 var baseElementsReactPow = [], baseNodesVolt = [], baseElementsNodesPow = [];
 
+var node = element = transformer = branch = null;
+
 //Getting variables from config file 
 var area = config.areaId, voltage = config.minRatedVoltage, nodeIndex = config.nodeCharIndex, nodeChar = config.nodeChar;
 
@@ -31,41 +73,33 @@ setPowerFlowSettings( config );
 //Calculate power flow, if fails throw error 
 CPF();
 
-//Try to read file from location specified in configuration file, then make array from file and close it
+//Try to read file from location specified in configuration file, then make array from file and close that file
 var inputFile = readFile( config, fso );
 var inputArray = getInputArray( inputFile );
 inputFile.close();
 
 var contains = null;
 
-//Fill node and baseNodesVolt arrays with nodes that matches names from input file
+//Fill node and baseNodesVolt arrays with nodes that matches names from input array
 for( var i = 1; i < Data.N_Nod; i++ ){
 
   contains = false;
 
-  var n = NodArray.Get( i );
-
-  //Add to config file
-  if( stringContainsWord( n.Name, "55" ) ) continue;
+  node = NodArray.Get( i );
   
-  for( var j in inputArray ){
-
-    if( stringContainsWord( n.Name, inputArray[ j ] ) ){
-      
-      contains = true;
-      
-      break;
-    }
-
-  }
+  //If skip fake nodes is set in config, then check if node ends with 55
+  if( config.skipFakeNodes && isStringMatchingRegex( strip( node.Name ), "55$" ) ) continue;
+    
+  //Checks if node's name matches one of the inputArray's regexes
+  contains = isStringMatchingRegexArray( strip( node.Name ), inputArray );
 
   //Add node to both arrays that fulfills all conditions:
-  //matching area, connected, not generator's node, higher voltage setpoint than specified in configure file, node contains one of names from input file
-  if( n.Area === area && n.St > 0 && n.Name.charAt( nodeIndex ) != nodeChar && n.Vn >= voltage && contains ){ 
+  //matching area ( if not set to 0 ), connected, not generator's node, higher voltage setpoint than specified in configure file, node contains one of names from input file
+  if( ( node.Area === area || node.Area <= 0 ) && node.St > 0 && node.Name.charAt( nodeIndex ) != nodeChar && node.Vn >= voltage && contains ){ 
     
-    nodes.push( n );
+    nodes.push( node );
     
-    baseNodesVolt.push( n.Vi );
+    baseNodesVolt.push( node.Vi );
   }
 
 }
@@ -76,59 +110,55 @@ for( var i = 1; i < Data.N_Gen; i++ ){
 
   contains = false;
 
-  var g = GenArray.Get( i );
+  element = GenArray.Get( i );
 
-  var n = NodArray.Get( g.NrNod );
-
-  for( var j in inputArray ){
-
-    if( stringContainsWord( n.Name, inputArray[ j ] ) ){
-      
-      contains = true;
-      
-      break;
-    }
-
+  node = NodArray.Get( element.NrNod );
+  
+  if( element.TrfName ){ 
+  
+    branch = BraArray.Find( element.TrfName );
+    
+    node = ( node.Name === branch.EndName ) ? NodArray.Find( branch.BegName ) : NodArray.Find( branch.EndName );
   }
- 
+  
+  //Checks if node's name matches one of the inputArray's regexes
+  contains = isStringMatchingRegexArray( strip( node.Name ), inputArray );
+
   //Add valid generators to arrays. Constrains:
-  //Minimal reactive power is not equal or higher than maximum reactive power, generator is connected to grid, matches area, 
+  //Minimal reactive power is not equal or higher than maximum reactive power, matches area, 
   //generator's node contains one of names from input file 
-  if( g.Qmin < g.Qmax && g.St > 0 && n.Area === area && n.Name.charAt( nodeIndex ) == nodeChar && contains ){
+  if( element.Qmin < element.Qmax && element.St > 0 && node.Area === area && contains ){
+  
+    elements.push( [ element, node ] );
 
-    elements.push( [ g, n ] );
+    baseElementsReactPow.push( element.Qg );
 
-    baseElementsReactPow.push( g.Qg );
-
-    baseElementsNodesPow.push( n.Vs );
+    baseElementsNodesPow.push( node.Vs );
   }
    
 }
 
-var b = null;
-
 //Add valid transformers to arrays with coresponding node and branch. Constrains:
-//Transformer must be connected to node from nodes array, have more than 1 tap, not already been in elements array
+//Transformer must be connected to node from nodes array, have more than 1 tap, not already in elements array
 for( i in nodes ){
 
-  var n = nodes[ i ];
+  node = nodes[ i ];
 
   for( var j = 1; j < Data.N_Trf; j++ ){
 
-    var t = TrfArray.Get( j );
+    transformer = TrfArray.Get( j );
     
-    if( ( n.Name == t.EndName || n.Name == t.BegName ) && !elementInArrayByName( elements, t.Name ) && t.Lstp != 1 ){
+    if( ( node.Name == transformer.EndName || node.Name == transformer.BegName ) && !isElementInArrayByName( elements, transformer.Name ) && transformer.Lstp != 1 ){
 
-      b = BraArray.Find( t.Name );
+      branch = BraArray.Find( transformer.Name );
 
-      elements.push( [ t, n, b ] );
+      elements.push( [ transformer, node, branch ] );
       
-      baseElementsNodesPow.push( t.Stp0 );
+      baseElementsNodesPow.push( transformer.Stp0 );
       
-      if( n.Name === t.EndName ) baseElementsReactPow.push( b.Qend );
+      if( node.Name === transformer.EndName ) baseElementsReactPow.push( branch.Qend );
       
-      else baseElementsReactPow.push( b.Qbeg );
-      
+      else baseElementsReactPow.push( branch.Qbeg );
     }
     
   }
@@ -143,76 +173,27 @@ var file2 = createFile( "V", config, fso );
 file1.Write( "Elements;Old U_G / Tap;New U_G / Tap;" );
 file2.Write( "Elements;Old U_G / Tap;New U_G / Tap;" );
 
-var temp = "Base;X;X;";
 
-for( i in elements ){
+//Writes for each element it's node react power 
+writeDataToFile( file1, elements, baseElementsReactPow );
 
-  file1.Write( elements[ i ][ 0 ].Name + ";" );
-
-  temp += roundTo( baseElementsReactPow[ i ], 2 ) + ";";
-}
-
-file1.WriteLine( "\n" + temp );
-
-temp = "Base;X;X;";
-
-for( i in nodes ){
-
-  file2.Write( nodes[ i ].Name + ";" );
-
-  temp += roundTo( baseNodesVolt[ i ], 2 ) + ";";
-}
-
-file2.WriteLine( "\n" + temp );
+//Writes for each element it's node voltage
+writeDataToFile( file2, nodes, baseNodesVolt );
 
 //Trying to save file before any change on transformers and connected nodes
 if( SaveTempBIN( tmpFile ) < 1 ) errorThrower( "Unable to create temporary file" );
 
-for( i in elements ){
+//For each element make some change depending on type of elemenet, then write results into result files
+for( i in elements ){ 
   
-  var g = elements[ i ][ 0 ], n = elements[ i ][ 1 ];
+  var element = elements[ i ][ 0 ], node = elements[ i ][ 1 ];
   
-  //Check if generator has block transformer
-  if( g.TrfName != "" && !elements[ i ][ 2 ] ){
-
-    //Find transformer and change it's type to 11 ( without regulation )
-    var t = TrfArray.Find( g.TrfName );
-    t.Typ = 11;
-    
-    //Check if transformer name's ends with A, indicates that there are more than 1 block transformers connected to generator
-    if( g.TrfName.charAt( g.TrfName.length - 1 ) == 'A' ){
-      
-      var l = 'B';
-      //Transformer name without last char
-      var tName = g.TrfName.slice(0, -1);
-      
-      //As long as there are transformers with same name ending with next letter, then change it's type to 11 ( without regulation )
-      while( true ){
-        
-        //Try to assign a transformer to variable and transformer type to 11 ( without regulation )
-        try{
-          
-          t = TrfArray.Find( tName + l ); 
-          t.Typ = 11;
-        }
-        
-        //If t is null then exit while loop
-        catch( e ){ break; }
-        
-        //changes l to next letter by adding 1 to it's char code
-        l = String.fromCharCode ( l.charCodeAt( 0 ) + 1 );
-      }
-
-    }
-
-  }
-
   //If array element have a branch then try to switch tap up 
   if( elements[ i ][ 2 ] ){
   
-    if( ( g.TapLoc === 1 && g.Stp0 < g.Lstp ) ) g.Stp0++;
+    if( ( element.TapLoc === 1 && element.Stp0 < element.Lstp ) ) element.Stp0++;
     
-    else if( ( g.TapLoc === 0 && g.Stp0 > 1 ) ) g.Stp0--;  
+    else if( ( element.TapLoc === 0 && element.Stp0 > 1 ) ) element.Stp0--;  
   }
 
   else{
@@ -220,16 +201,16 @@ for( i in elements ){
     //get set value from config file and add it to node's voltage
     var value = config.changeValue;
     
-    n.Vs += value;
+    node.Vs += value;
   }
 
   //Calculate power flow, if fails try to load original model and throw error 
   if( CalcLF() != 1 ) saveErrorThrower( "Power Flow calculation failed", tmpOgFile );
 
   //Write element's name, it's base connected node power / tap number and new connected node power / tap number
-  if( elements[ i ][ 2 ] ) file1.Write( g.Name + ";" + baseElementsNodesPow[ i ] + ";" + g.Stp0 + ";" );
+  if( elements[ i ][ 2 ] ) file1.Write( element.Name + ";" + baseElementsNodesPow[ i ] + ";" + element.Stp0 + ";" );
   
-  else file1.Write( g.Name + ";" + roundTo( baseElementsNodesPow[ i ], 2 ) + ";" + roundTo( n.Vs, 2 ) + ";" );
+  else file1.Write( element.Name + ";" + roundTo( baseElementsNodesPow[ i ], 2 ) + ";" + roundTo( node.Vs, 2 ) + ";" );
 
   var react = null; 
   
@@ -238,6 +219,7 @@ for( i in elements ){
 
     react = null;
 
+    //Check if element have a branch, if true use reactive power from matching branch end
     if( elements[ j ][ 2 ] ){
 
       react = ( elements[ j ][ 0 ].begName === elements[ j ][ 1 ].Name ) ? elements[ j ][ 2 ].Qbeg : elements[ j ][ 2 ].Qend;
@@ -252,9 +234,9 @@ for( i in elements ){
   file1.WriteLine("");
 
   //Write element's name, it's base connected node power / tap number and new connected node power / tap number
-  if( elements[ i ][ 2 ] ) file2.Write( g.Name + ";" + baseElementsNodesPow[ i ] + ";" + g.Stp0 + ";" );
+  if( elements[ i ][ 2 ] ) file2.Write( element.Name + ";" + baseElementsNodesPow[ i ] + ";" + element.Stp0 + ";" );
   
-  else file2.Write( g.Name + ";" + roundTo( baseElementsNodesPow[ i ], 2 ) + ";" + roundTo( n.Vs, 2 ) + ";" );
+  else file2.Write( element.Name + ";" + roundTo( baseElementsNodesPow[ i ], 2 ) + ";" + roundTo( node.Vs, 2 ) + ";" );
   
   //Write for each node it's new voltage
   for( j in nodes ) file2.Write( roundTo( nodes[ j ].Vi, 2 ) + ";" );
@@ -267,7 +249,7 @@ for( i in elements ){
 }
 
 //Loading original model
-ReadTempBIN( tmpOgFile );
+ReadTempBIN( tmpOgFile ); 
 
 //Removing temporary binary files
 fso.DeleteFile( tmpFile );
@@ -277,8 +259,10 @@ fso.DeleteFile( tmpOgFile );
 file1.Close();
 file2.Close();
 
+//Gets program working duration and shows it in a message box
+//Working duration dosen't work if program starts and ends in a different day due to lack of futher date checking 
 time = getTime() - time;
-cprintf( "Time Elapsed: "+ time ); 
+MsgBox( "Task completed in " + formatTime( time ), 0 | 64, "Task completed" );
 
 //Function uses JS Math.round, takes value and returns rounded value to specified decimals 
 function roundTo( value, precision ){
@@ -320,30 +304,56 @@ function CPF(){
   if( CalcLF() != 1 ) errorThrower( "Power Flow calculation failed" );
 }
 
-//Function checks if word is in a string. Word can only be matched whole
-function stringContainsWord( string, word ){
-  
-  var j = 0;
+//Function takes string and returns it without whitespaces
+function strip( string ){
 
-  for( var i = 0; i < string.length; i++ ){
+  var strippedString = string;
   
-    j = ( string.charAt( i ) === word.charAt( j ) ) ? j + 1 : 0;
-  
-    if( j === word.length ) return true;
-  }
+  return strippedString.replace(/(^\s+|\s+$)/g, '');
+}
+
+//Function checks if string matches regex and returns true/false
+function isStringMatchingRegex( string, regex ){
+
+  //Regex flags for Multiline and Insensitive
+  var regexExpression = new RegExp( regex , "mi" );  
+    
+  if( string.search( regexExpression ) > -1 ) return true;
   
   return false;
 }
 
-//Function gets each element's name from 2D array and compares it to elementName 
-function elementInArrayByName( array, elementName ){
+//Function checks if string matches any of regexes in an array and returns true/false
+function isStringMatchingRegexArray( string, array ){
 
-  for( i in array ){
-  
-    if(array[ i ][ 0 ].Name === elementName) return true;
-  }
+  for( var i in array ) if( isStringMatchingRegex( string, "^" + array[ i ] ) ) return true;
 
   return false;
+}
+
+//Function gets each element's name from 2D array and compares it to elementName 
+function isElementInArrayByName( array, elementName ){
+
+  for( i in array ) if(array[ i ][ 0 ].Name === elementName) return true;
+
+  return false;
+}
+
+//Function writes to specifed file objects names and corresponding data
+function writeDataToFile( file, objectArray, dataArray ){
+
+  var text = "Base;X;X;";
+  
+  for( i in objectArray ){
+  
+    if( objectArray[ i ][ 0 ] ) file.Write( objectArray[ i ][ 0 ].Name + ";" );
+
+    else file.Write( objectArray[ i ].Name + ";" );
+    
+    text += roundTo( dataArray[ i ], 2 ) + ";";
+  }
+
+  file.WriteLine( "\n" + text );
 }
 
 //Function takes config object and depending on it's config creates folder in specified location. 
@@ -432,6 +442,7 @@ function iniConfigConstructor( iniPath, fso ){
     nodeCharIndex: ini.GetInt( "variable", "nodeCharIndex", 0 ),
     nodeChar: ini.GetString( "variable", "nodeChar", 'Y' ),
     changeValue: ini.GetInt( "variable", "changeValue", 1 ),
+    skipFakeNodes: ini.GetBool( "variable", "skipFakeNodes", 0 ),
 
     //Folder
     createResultsFolder: ini.GetBool( "folder", "createResultsFolder", 0 ),
@@ -465,6 +476,7 @@ function iniConfigConstructor( iniPath, fso ){
   ini.WriteInt( "variable", "nodeCharIndex", conf.nodeCharIndex );
   ini.WriteString( "variable", "nodeChar", conf.nodeChar );
   ini.WriteInt( "variable", "changeValue", conf.changeValue );
+  ini.WriteBool( "variable", "skipFakeNodes", conf.skipFakeNodes );
 
   //Folder
   ini.WriteBool( "folder", "createResultsFolder", conf.createResultsFolder );
@@ -488,7 +500,7 @@ function iniConfigConstructor( iniPath, fso ){
   return conf;
 }
 
-//Function gets file and takes each line into a array and after finding "," character pushes array into other array
+//Function gets file and takes each line into a array and after finding "," character pushes array into other array. Returns string array
 function getInputArray( file ){
 
   var array = []; 
@@ -503,7 +515,7 @@ function getInputArray( file ){
       
       word = tmp[ i ].replace(/(^\s+|\s+$)/g, '');
       
-      if( word != "" ) array.push( word );
+      if( word != "" ) array.push( word.toUpperCase() );
     }
 
   }
@@ -522,9 +534,26 @@ function getCurrentDate(){
   return current.getFullYear() + "-" + formatedDateArray[ 0 ] + "-" + formatedDateArray[ 1 ] + "--" + formatedDateArray[ 2 ] + "-" + formatedDateArray[ 3 ] + "-" + formatedDateArray[ 4 ];
 }
 
+//Function returns current time in seconds 
 function getTime(){
   
   var current = new Date();
   
   return current.getHours() * 3600 + current.getMinutes() * 60 + current.getSeconds();
+}
+
+//Function takes time in seconds and returns time in HH:MM:SS format
+function formatTime( time ){
+
+  var hours = minutes = 0;
+
+  hours = Math.floor( time / 3600 );
+
+  time -= hours * 3600;
+
+  minutes = Math.floor( time / 60 );
+
+  time -= minutes * 60;
+
+  return ( '0' + hours ).slice( -2 ) + ":" + ( '0' + minutes ).slice( -2 ) + ":" + ( '0' + time ).slice( -2 );
 }
