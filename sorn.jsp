@@ -1,6 +1,10 @@
 //BEFORE RUNNING MAKE SURE TO CHANGE homeFolder VARIABLE TO LOCATION OF THE CONFIGURATION FILE
 var homeFolder = "C:\\Users\\lukas\\Documents\\Github\\Plans_SORN_Macro\\files";
 
+//
+//TODO: csv file write changes to make reading data from excel easier
+//
+
 /*  
   Description:
   
@@ -56,11 +60,10 @@ var tmpFile = config.homeFolder + "\\tmp.bin", tmpOgFile = config.homeFolder + "
 ReadDataKDM( config.modelPath + "\\" + config.modelName + ".kdm" );
 if( SaveTempBIN( tmpOgFile ) < 1 ) errorThrower( "Unable to create temporary file" );
 
+//Getting macro's start time
 var time = getTime();
 
-var nodes = [], elements = [];
-
-var baseElementsReactPow = [], baseNodesVolt = [], baseElementsNodesPow = [];
+var nodes = [], elements = [], baseElementsReactPow = [], baseNodesVolt = [], baseElementsNodesPow = [];
 
 var node = element = transformer = branch = contains = null;
 
@@ -91,9 +94,8 @@ for( var i = 1; i < Data.N_Nod; i++ ){
 
   //Add node to both arrays that fulfills all conditions:
   //matching area ( if not set to 0 ), connected, not generator's node, higher voltage setpoint than specified in configure file, node contains one of names from input file
-  //if( ( node.Area === area || node.Area <= 0 ) && node.St > 0 && node.Name.charAt( nodeIndex ) != nodeChar && node.Vn >= voltage && contains ){ 
-  if( ( node.Area === area || node.Area <= 0 ) && node.St > 0 && node.Vn >= voltage && contains ){ 
-      
+  if( ( node.Area === area || node.Area <= 0 ) && node.St > 0 && node.Name.charAt( nodeIndex ) != nodeChar && node.Vn >= voltage && contains ){ 
+     
     nodes.push( node );
     
     baseNodesVolt.push( node.Vi );
@@ -109,12 +111,21 @@ for( var i = 1; i < Data.N_Gen; i++ ){
 
   node = NodArray.Get( element.NrNod );
   
+  
+  //
+  //TODO: create option in config file if we want to add generetors without transformers and on nodes of type 1 
+  //
+  
   if( element.TrfName ){ 
   
     branch = BraArray.Find( element.TrfName );
     
     node = ( node.Name === branch.EndName ) ? NodArray.Find( branch.BegName ) : NodArray.Find( branch.EndName );
   }
+  else continue;
+  
+  if( node.Typ === 1 ) continue;
+  
   
   //Checks if node's name matches one of the inputArray's regexes
   contains = isStringMatchingRegexArray( strip( node.Name ), inputArray );
@@ -123,9 +134,9 @@ for( var i = 1; i < Data.N_Gen; i++ ){
   //Minimal reactive power is not equal or higher than maximum reactive power, matches area ( if not set to 0 ), 
   //generator's node contains one of names from input file 
   if( element.Qmin < element.Qmax && element.St > 0 && ( node.Area === area || node.Area <= 0 ) && contains ){
-  
+     
     elements.push( [ element, node ] );
-
+    
     baseElementsReactPow.push( element.Qg );
 
     baseElementsNodesPow.push( node.Vs );
@@ -142,9 +153,15 @@ for( i in nodes ){
   for( var j = 1; j < Data.N_Trf; j++ ){
 
     transformer = TrfArray.Get( j );
-    
-    if( ( node.Name == transformer.EndName || node.Name == transformer.BegName ) && !isElementInArrayByName( elements, transformer.Name ) && transformer.Lstp != 1 ){
+     
+    if( 
+        ( node.Name == transformer.EndName || node.Name == transformer.BegName ) && 
 
+        transformer.EndName.charAt( nodeIndex ) != nodeChar && transformer.BegName.charAt( nodeIndex )!= nodeChar && 
+        
+        !isElementInArrayByName( elements, transformer.Name ) && transformer.Lstp > 1 
+    ){
+    
       branch = BraArray.Find( transformer.Name );
 
       elements.push( [ transformer, node, branch ] );
@@ -288,9 +305,7 @@ function CPF(){
 //Function takes string and returns it without whitespaces
 function strip( string ){
 
-  var strippedString = string;
-  
-  return strippedString.replace(/(^\s+|\s+$)/g, '');
+  return string.replace(/(^\s+|\s+$)/g, '');
 }
 
 //Function checks if string matches regex and returns true/false
@@ -353,9 +368,7 @@ function createFolder( config, fso ){
     catch( err ){ errorThrower( "Unable to create folder" ); }
   }
   
-  folder += "\\";
-
-  return folder;
+  return folder + "\\";
 }
 
 //Function takes config object and depending on it's config creates file in specified location.
@@ -410,7 +423,7 @@ function iniConfigConstructor( iniPath, fso ){
   var hFolder = ini.GetString( "main", "homeFolder", Main.WorkDir );
   
   //Declaring conf object and trying to fill it with config.ini configuration
-  var conf = {
+  var config = {
   
     //Main
     homeFolder: hFolder,
@@ -447,56 +460,54 @@ function iniConfigConstructor( iniPath, fso ){
   
   //Overwriting config.ini file
   //Main
-  ini.WriteString( "main", "homeFolder", conf.homeFolder );
-  ini.WriteString( "main", "modelName", conf.modelName );
-  ini.WriteString( "main", "modelPath", conf.modelPath );
+  ini.WriteString( "main", "homeFolder", config.homeFolder );
+  ini.WriteString( "main", "modelName", config.modelName );
+  ini.WriteString( "main", "modelPath", config.modelPath );
   
   //Variable
-  ini.WriteInt( "variable", "areaId", conf.areaId );
-  ini.WriteInt( "variable", "minRatedVoltage", conf.minRatedVoltage );
-  ini.WriteInt( "variable", "nodeCharIndex", conf.nodeCharIndex );
-  ini.WriteString( "variable", "nodeChar", conf.nodeChar );
-  ini.WriteInt( "variable", "changeValue", conf.changeValue );
-  ini.WriteBool( "variable", "skipFakeNodes", conf.skipFakeNodes );
+  ini.WriteInt( "variable", "areaId", config.areaId );
+  ini.WriteInt( "variable", "minRatedVoltage", config.minRatedVoltage );
+  ini.WriteInt( "variable", "nodeCharIndex", config.nodeCharIndex );
+  ini.WriteString( "variable", "nodeChar", config.nodeChar );
+  ini.WriteInt( "variable", "changeValue", config.changeValue );
+  ini.WriteBool( "variable", "skipFakeNodes", config.skipFakeNodes );
 
   //Folder
-  ini.WriteBool( "folder", "createResultsFolder", conf.createResultsFolder );
-  ini.WriteString( "folder", "folderName", conf.folderName );
+  ini.WriteBool( "folder", "createResultsFolder", config.createResultsFolder );
+  ini.WriteString( "folder", "folderName", config.folderName );
     
   //Files
-  ini.WriteString( "files", "inputFileLocation", conf.inputFileLocation );
-  ini.WriteString( "files", "inputFileName", conf.inputFileName );
-  ini.WriteString( "files", "inputFileFormat", conf.inputFileFormat );
-  ini.WriteBool( "files", "addTimestampToResultsFiles", conf.addTimestampToResultsFiles );
-  ini.WriteString( "files", "resultsFilesName", conf.resultsFilesName );
-  ini.WriteInt( "files", "roundingPrecision", conf.roundingPrecision );
+  ini.WriteString( "files", "inputFileLocation", config.inputFileLocation );
+  ini.WriteString( "files", "inputFileName", config.inputFileName );
+  ini.WriteString( "files", "inputFileFormat", config.inputFileFormat );
+  ini.WriteBool( "files", "addTimestampToResultsFiles", config.addTimestampToResultsFiles );
+  ini.WriteString( "files", "resultsFilesName", config.resultsFilesName );
+  ini.WriteInt( "files", "roundingPrecision", config.roundingPrecision );
     
   //Power Flow
-  ini.WriteInt( "power flow", "maxIterations", conf.maxIterations );
-  ini.WriteDouble( "power flow", "startingPrecision", conf.startingPrecision );
-  ini.WriteDouble( "power flow", "precision", conf.precision );
-  ini.WriteDouble( "power flow", "uzgIterationPrecision", conf.uzgIterationPrecision );
-  ini.WriteInt( "power flow", "method", conf.method );
+  ini.WriteInt( "power flow", "maxIterations", config.maxIterations );
+  ini.WriteDouble( "power flow", "startingPrecision", config.startingPrecision );
+  ini.WriteDouble( "power flow", "precision", config.precision );
+  ini.WriteDouble( "power flow", "uzgIterationPrecision", config.uzgIterationPrecision );
+  ini.WriteInt( "power flow", "method", config.method );
  
-  return conf;
+  return config;
 }
 
 //Function gets file and takes each line into a array and after finding "," character pushes array into other array. Returns string array
 function getInputArray( file ){
 
-  var array = []; 
+  var array = tmp = [], word; 
 
   while(!file.AtEndOfStream){
-
-    var tmp = [], line = file.ReadLine(), word = null;
-    
-    tmp = line.split(",");
+   
+    tmp = file.ReadLine().split(",");
 
     for( i in tmp ){
       
       word = tmp[ i ].replace(/(^\s+|\s+$)/g, '');
       
-      if( word != "" ) array.push( word.toUpperCase() );
+      if( word ) array.push( word.toUpperCase() );
     }
 
   }
