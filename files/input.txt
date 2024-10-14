@@ -1,4 +1,4 @@
-[a-z]{3}
+[a-z],
 
 ZRC,GBL,GDP,
 

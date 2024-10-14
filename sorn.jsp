@@ -111,10 +111,7 @@ for( var i = 1; i < Data.N_Gen; i++ ){
 
   node = NodArray.Get( element.NrNod );
   
-  
-  //
-  //TODO: create option in config file if we want to add generetors without transformers and on nodes of type 1 
-  //
+  //TODO: make neatter checks for generators' skips
   
   if( element.TrfName ){ 
   
@@ -122,10 +119,9 @@ for( var i = 1; i < Data.N_Gen; i++ ){
     
     node = ( node.Name === branch.EndName ) ? NodArray.Find( branch.BegName ) : NodArray.Find( branch.EndName );
   }
-  else continue;
+  else if( config.skipGeneratorsWithoutTransformers ) continue;
   
-  if( node.Typ === 1 ) continue;
-  
+  if( config.skipGeneratorsConnectedToNodesTypeOne && node.Typ === 1 ) continue;
   
   //Checks if node's name matches one of the inputArray's regexes
   contains = isStringMatchingRegexArray( strip( node.Name ), inputArray );
@@ -437,7 +433,9 @@ function iniConfigConstructor( iniPath, fso ){
     nodeChar: ini.GetString( "variable", "nodeChar", 'Y' ),
     changeValue: ini.GetInt( "variable", "changeValue", 1 ),
     skipFakeNodes: ini.GetBool( "variable", "skipFakeNodes", 0 ),
-
+    skipGeneratorsConnectedToNodesTypeOne: ini.GetBool( "variable", "skipGeneratorsConnectedToNodesTypeOne", 0 ),
+    skipGeneratorsWithoutTransformers: ini.GetBool( "variable", "skipGeneratorsWithoutTransformers", 0 ),
+    
     //Folder
     createResultsFolder: ini.GetBool( "folder", "createResultsFolder", 0 ),
     folderName: ini.GetString( "folder", "folderName", "folder" ),
@@ -471,7 +469,9 @@ function iniConfigConstructor( iniPath, fso ){
   ini.WriteString( "variable", "nodeChar", config.nodeChar );
   ini.WriteInt( "variable", "changeValue", config.changeValue );
   ini.WriteBool( "variable", "skipFakeNodes", config.skipFakeNodes );
-
+  ini.WriteBool( "variable", "skipGeneratorsConnectedToNodesTypeOne", config.skipGeneratorsConnectedToNodesTypeOne );
+  ini.WriteBool( "variable", "skipGeneratorsWithoutTransformers", config.skipGeneratorsWithoutTransformers );
+  
   //Folder
   ini.WriteBool( "folder", "createResultsFolder", config.createResultsFolder );
   ini.WriteString( "folder", "folderName", config.folderName );
