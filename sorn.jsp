@@ -113,6 +113,8 @@ for( var i = 1; i < Data.N_Gen; i++ ){
   
   //TODO: make neatter checks for generators' skips
   
+  if( config.skipGeneratorsConnectedToNodesTypeOne && node.Typ === 1 ) continue;
+  
   if( element.TrfName ){ 
   
     branch = BraArray.Find( element.TrfName );
@@ -121,16 +123,16 @@ for( var i = 1; i < Data.N_Gen; i++ ){
   }
   else if( config.skipGeneratorsWithoutTransformers ) continue;
   
-  if( config.skipGeneratorsConnectedToNodesTypeOne && node.Typ === 1 ) continue;
-  
   //Checks if node's name matches one of the inputArray's regexes
-  contains = isStringMatchingRegexArray( strip( node.Name ), inputArray );
-
+  //contains = isStringMatchingRegexArray( strip( node.Name ), inputArray );
+  if( !isStringMatchingRegexArray( strip( node.Name ), inputArray ) ) continue;
+  
   //Add valid generators to arrays. Constrains:
   //Minimal reactive power is not equal or higher than maximum reactive power, matches area ( if not set to 0 ), 
   //generator's node contains one of names from input file 
-  if( element.Qmin < element.Qmax && element.St > 0 && ( node.Area === area || node.Area <= 0 ) && contains ){
-     
+  //if( element.Qmin < element.Qmax && element.St > 0 && ( node.Area === area || node.Area <= 0 ) && contains ){
+  if( element.Qmin < element.Qmax && element.St > 0 && ( node.Area === area || node.Area <= 0 ) ){   
+  
     elements.push( [ element, node ] );
     
     baseElementsReactPow.push( element.Qg );
@@ -180,10 +182,10 @@ var files = [ createFile( "Q", config, fso ), createFile( "V", config, fso ) ];
 for( var i = 0; i < files.length; i++ ) files[ i ].Write( "Elements;Old U_G / Tap;New U_G / Tap;" );
 
 //Writes for each element it's node react power 
-writeDataToFile( files[ 0 ], elements, baseElementsReactPow );
+writeDataToFile( config, files[ 0 ], elements, baseElementsReactPow );
 
 //Writes for each element it's node voltage
-writeDataToFile( files[ 1 ], nodes, baseNodesVolt );
+writeDataToFile( config, files[ 1 ], nodes, baseNodesVolt );
 
 //Trying to save file before any change on transformers and connected nodes
 if( SaveTempBIN( tmpFile ) < 1 ) errorThrower( "Unable to create temporary file" );
@@ -210,9 +212,9 @@ for( i in elements ){
   for( var j = 0; j < files.length; j++ ){
 
     //Write element's name, it's base connected node power / tap number and new connected node power / tap number
-    if( elements[ i ][ 2 ] ) files[ j ].Write( element.Name + ";" + baseElementsNodesPow[ i ] + ";" + element.Stp0 + ";" );
+    if( elements[ i ][ 2 ] ) files[ j ].Write( strip( element.Name ) + ";" + baseElementsNodesPow[ i ] + ";" + element.Stp0 + ";" );
   
-    else files[ j ].Write( element.Name + ";" + roundTo( baseElementsNodesPow[ i ], 2 ) + ";" + roundTo( node.Vs, 2 ) + ";" );
+    else files[ j ].Write( strip( element.Name ) + ";" + roundTo( baseElementsNodesPow[ i ], config.roundingPrecision ) + ";" + roundTo( node.Vs, config.roundingPrecision ) + ";" );
   }
 
   var react = null; 
@@ -228,14 +230,14 @@ for( i in elements ){
 
     else react = elements[ j ][ 0 ].Qg;
   
-    files[ 0 ].Write( roundTo( react, 2 ) + ";" );
+    files[ 0 ].Write( roundTo( react, config.roundingPrecision ) + ";" );
   }
   
   //Add end line character to file
   files[ 0 ].WriteLine("");
 
   //Write for each node it's new voltage
-  for( j in nodes ) files[ 1 ].Write( roundTo( nodes[ j ].Vi, 2 ) + ";" );
+  for( j in nodes ) files[ 1 ].Write( roundTo( nodes[ j ].Vi, config.roundingPrecision ) + ";" );
 
   //Add end line character to file
   files[ 1 ].WriteLine("");
@@ -261,7 +263,7 @@ MsgBox( "Task completed in " + formatTime( getTime() - time ), 0 | 64, "Task com
 //Function uses JS Math.round, takes value and returns rounded value to specified decimals 
 function roundTo( value, precision ){
 
-  return Math.round( value * ( 10 * precision ) ) / ( 10 * precision ) ;
+  return Math.round( value * Math.pow( 10, precision ) ) / Math.pow( 10, precision );
 }
 
 //Set power flow settings using config file
@@ -332,17 +334,17 @@ function isElementInArrayByName( array, elementName ){
 }
 
 //Function writes to specifed file objects names and corresponding data
-function writeDataToFile( file, objectArray, dataArray ){
+function writeDataToFile( config, file, objectArray, dataArray ){
 
   var text = "Base;X;X;";
   
   for( i in objectArray ){
   
-    if( objectArray[ i ][ 0 ] ) file.Write( objectArray[ i ][ 0 ].Name + ";" );
+    if( objectArray[ i ][ 0 ] ) file.Write( strip( objectArray[ i ][ 0 ].Name ) + ";" );
 
-    else file.Write( objectArray[ i ].Name + ";" );
+    else file.Write( strip( objectArray[ i ].Name ) + ";" );
     
-    text += roundTo( dataArray[ i ], 2 ) + ";";
+    text += roundTo( dataArray[ i ], config.roundingPrecision ) + ";";
   }
 
   file.WriteLine( "\n" + text );
@@ -497,7 +499,7 @@ function iniConfigConstructor( iniPath, fso ){
 //Function gets file and takes each line into a array and after finding "," character pushes array into other array. Returns string array
 function getInputArray( file ){
 
-  var array = tmp = [], word; 
+  var array = [], tmp = [], word; 
 
   while(!file.AtEndOfStream){
    
