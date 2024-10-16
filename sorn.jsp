@@ -1,9 +1,5 @@
-//BEFORE RUNNING MAKE SURE TO CHANGE homeFolder VARIABLE TO LOCATION OF THE CONFIGURATION FILE
-var homeFolder = "C:\\Users\\lukas\\Documents\\Github\\Plans_SORN_Macro\\files";
-
-//
-//TODO: csv file write changes to make reading data from excel easier
-//
+//BEFORE RUNNING MAKE SURE TO CHANGE configurationFileLocation VARIABLE TO LOCATION OF THE CONFIGURATION FILE
+var configurationFileLocation = "C:\\Users\\lukas\\Documents\\Github\\Plans_SORN_Macro\\files";
 
 /*  
   Description:
@@ -53,22 +49,19 @@ var homeFolder = "C:\\Users\\lukas\\Documents\\Github\\Plans_SORN_Macro\\files";
 var fso = new ActiveXObject( "Scripting.FileSystemObject" );
 
 //Initializing configuration object
-var config = iniConfigConstructor( homeFolder, fso );
+var config = iniConfigConstructor( configurationFileLocation, fso );
 var tmpFile = config.homeFolder + "\\tmp.bin", tmpOgFile = config.homeFolder + "\\tmpOrg.bin";
 
 //Loading kdm model file and trying to save it as temporary binary file
-ReadDataKDM( config.modelPath + "\\" + config.modelName + ".kdm" );
+ReadDataKDM( config.modelPath + "\\" + config.modelName );
 if( SaveTempBIN( tmpOgFile ) < 1 ) errorThrower( "Unable to create temporary file" );
 
 //Getting macro's start time
 var time = getTime();
 
-var nodes = [], elements = [], baseElementsReactPow = [], baseNodesVolt = [], baseElementsNodesPow = [];
+var nodes = [], elements = [], baseElementsReactPow = [], baseNodesVolt = [];
 
-var node = element = transformer = branch = contains = null;
-
-//Getting variables from config file 
-var area = config.areaId, voltage = config.minRatedVoltage, nodeIndex = config.nodeCharIndex, nodeChar = config.nodeChar;
+var node = element = transformer = branch = react = elementBaseValue = null;
 
 //Setting power flow calculation settings with settings from config file
 setPowerFlowSettings( config );
@@ -89,12 +82,16 @@ for( var i = 1; i < Data.N_Nod; i++ ){
   //If skip fake nodes is set in config, then check if node ends with 55
   if( config.skipFakeNodes && isStringMatchingRegex( strip( node.Name ), "55$" ) ) continue;
     
-  //Checks if node's name matches one of the inputArray's regexes
-  contains = isStringMatchingRegexArray( strip( node.Name ), inputArray );
-
   //Add node to both arrays that fulfills all conditions:
-  //matching area ( if not set to 0 ), connected, not generator's node, higher voltage setpoint than specified in configure file, node contains one of names from input file
-  if( ( node.Area === area || node.Area <= 0 ) && node.St > 0 && node.Name.charAt( nodeIndex ) != nodeChar && node.Vn >= voltage && contains ){ 
+  //matching area ( if not set to 0 ), connected, not generator's node, higher voltage setpoint than specified in configure file, 
+  //node contains one of names from input file
+  if( 
+    ( node.Area === config.areaId || node.Area <= 0 ) && 
+
+    node.St > 0 && node.Name.charAt( config.nodeCharIndex ) != config.nodeChar && 
+
+    node.Vn >= config.minRatedVoltage && isStringMatchingRegexArray( strip( node.Name ), inputArray ) 
+  ){ 
      
     nodes.push( node );
     
@@ -107,12 +104,8 @@ for( var i = 1; i < Data.N_Nod; i++ ){
 //Also fills baseElementsReactPow with generators reactive power and baseElementsNodesPow with connected nodes power
 for( var i = 1; i < Data.N_Gen; i++ ){
 
-  element = GenArray.Get( i );
-
-  node = NodArray.Get( element.NrNod );
-  
-  //TODO: make neatter checks for generators' skips
-  
+  element = GenArray.Get( i ), node = NodArray.Get( element.NrNod );
+    
   if( config.skipGeneratorsConnectedToNodesTypeOne && node.Typ === 1 ) continue;
   
   if( element.TrfName ){ 
@@ -122,22 +115,19 @@ for( var i = 1; i < Data.N_Gen; i++ ){
     node = ( node.Name === branch.EndName ) ? NodArray.Find( branch.BegName ) : NodArray.Find( branch.EndName );
   }
   else if( config.skipGeneratorsWithoutTransformers ) continue;
-  
-  //Checks if node's name matches one of the inputArray's regexes
-  //contains = isStringMatchingRegexArray( strip( node.Name ), inputArray );
-  if( !isStringMatchingRegexArray( strip( node.Name ), inputArray ) ) continue;
-  
+   
   //Add valid generators to arrays. Constrains:
   //Minimal reactive power is not equal or higher than maximum reactive power, matches area ( if not set to 0 ), 
   //generator's node contains one of names from input file 
-  //if( element.Qmin < element.Qmax && element.St > 0 && ( node.Area === area || node.Area <= 0 ) && contains ){
-  if( element.Qmin < element.Qmax && element.St > 0 && ( node.Area === area || node.Area <= 0 ) ){   
+  if( 
+    element.Qmin < element.Qmax && element.St > 0 && ( node.Area === config.areaId || node.Area <= 0 ) && 
+
+    isStringMatchingRegexArray( strip( node.Name ), inputArray ) 
+  ){   
   
     elements.push( [ element, node ] );
     
     baseElementsReactPow.push( element.Qg );
-
-    baseElementsNodesPow.push( node.Vs );
   }
    
 }
@@ -155,7 +145,7 @@ for( i in nodes ){
     if( 
         ( node.Name == transformer.EndName || node.Name == transformer.BegName ) && 
 
-        transformer.EndName.charAt( nodeIndex ) != nodeChar && transformer.BegName.charAt( nodeIndex )!= nodeChar && 
+        transformer.EndName.charAt( config.nodeCharIndex ) != config.nodeChar && transformer.BegName.charAt( config.nodeCharIndex )!= config.nodeChar && 
         
         !isElementInArrayByName( elements, transformer.Name ) && transformer.Lstp > 1 
     ){
@@ -163,8 +153,6 @@ for( i in nodes ){
       branch = BraArray.Find( transformer.Name );
 
       elements.push( [ transformer, node, branch ] );
-      
-      baseElementsNodesPow.push( transformer.Stp0 );
       
       if( node.Name === transformer.EndName ) baseElementsReactPow.push( branch.Qend );
       
@@ -195,30 +183,37 @@ for( i in elements ){
   
   element = elements[ i ][ 0 ], node = elements[ i ][ 1 ];
   
-  //If array element have a branch then try to switch tap up 
+  //If array element have a branch then try to switch tap up. If transformer is on it's last tap then change it down. 
   if( elements[ i ][ 2 ] ){
-  
-    if( ( element.TapLoc === 1 && element.Stp0 < element.Lstp ) ) element.Stp0++;
     
-    else if( ( element.TapLoc === 0 && element.Stp0 > 1 ) ) element.Stp0--;  
+    elementBaseValue = element.Stp0;
+
+    if( ( element.TapLoc === 1 && element.Stp0 < element.Lstp ) || ( element.TapLoc === 0 && element.Stp0 <= 1 ) ) element.Stp0++;
+    
+    else element.Stp0--;  
   }
 
   //get set value from config file and add it to node's voltage  
-  else node.Vs += config.changeValue;
-  
+  else{ 
+    
+    elementBaseValue = roundTo( node.Vs , config.roundingPrecision );
+    
+    node.Vs += config.changeValue;
+  }
   //Calculate power flow, if fails try to load original model and throw error 
   if( CalcLF() != 1 ) safeErrorThrower( "Power Flow calculation failed", tmpOgFile );
 
   for( var j = 0; j < files.length; j++ ){
 
     //Write element's name, it's base connected node power / tap number and new connected node power / tap number
-    if( elements[ i ][ 2 ] ) files[ j ].Write( strip( element.Name ) + ";" + baseElementsNodesPow[ i ] + ";" + element.Stp0 + ";" );
+    if( elements[ i ][ 2 ] ) files[ j ].Write( strip( element.Name ) + ";" + elementBaseValue + ";" + element.Stp0 + ";" );
   
-    else files[ j ].Write( strip( element.Name ) + ";" + roundTo( baseElementsNodesPow[ i ], config.roundingPrecision ) + ";" + roundTo( node.Vs, config.roundingPrecision ) + ";" );
+    else files[ j ].Write( 
+      strip( element.Name ) + ";" + elementBaseValue + ";" + 
+      roundTo( node.Vs, config.roundingPrecision ) + ";" 
+    );
   }
 
-  var react = null; 
-  
   //Write for each element it's new reactive power
   for( j in elements ){
 
@@ -233,14 +228,11 @@ for( i in elements ){
     files[ 0 ].Write( roundTo( react, config.roundingPrecision ) + ";" );
   }
   
-  //Add end line character to file
-  files[ 0 ].WriteLine("");
-
   //Write for each node it's new voltage
   for( j in nodes ) files[ 1 ].Write( roundTo( nodes[ j ].Vi, config.roundingPrecision ) + ";" );
 
-  //Add end line character to file
-  files[ 1 ].WriteLine("");
+  //Add end line character to each file
+  for( var j = 0; j < files.length; j++ ) files[ j ].WriteLine("");
 
   //Load model without any changes to transformators
   ReadTempBIN( tmpFile );
@@ -363,7 +355,7 @@ function createFolder( config, fso ){
     
     try{ fso.CreateFolder( folderPath ); }
     
-    catch( err ){ errorThrower( "Unable to create folder" ); }
+    catch( e ){ errorThrower( "Unable to create folder" ); }
   }
   
   return folder + "\\";
@@ -380,11 +372,11 @@ function createFile( name, config, fso ){
   
   var folder = ( config.createResultsFolder == 1 ) ? createFolder( config, fso ) : "";
   var timeStamp = ( config.addTimestampToResultsFiles == 1 ) ? getCurrentDate() + "--" : "";
-  var fileLocation = config.homeFolder + folder + timeStamp + config.resultsFilesName + "--" + name + ".csv";
+  var fileLocation = config.homeFolder + folder + timeStamp + config.resultsFilesName + name + ".csv";
   
   try{ file = fso.CreateTextFile( fileLocation ); }
   
-  catch( err ){ errorThrower( "File already exists or unable to create it" ); }
+  catch( e ){ errorThrower( "File already exists or unable to create it" ); }
 
   return file;
 } 
@@ -397,11 +389,11 @@ function readFile( config, fso ){
 
   var file = null;
 
-  var fileLocation = config.inputFileLocation + config.inputFileName + "." + config.inputFileFormat;
+  var fileLocation = config.inputFileLocation + config.inputFileName;
   
   try{ file = fso.OpenTextFile( fileLocation, 1, false, 0 ); }
 
-  catch( err ){ errorThrower( "Unable to find or open file" ); }
+  catch( e ){ errorThrower( "Unable to find or open file" ); }
 
   return file;
 }
@@ -445,7 +437,6 @@ function iniConfigConstructor( iniPath, fso ){
     //Files
     inputFileLocation: ini.GetString( "files", "inputFileLocation", hFolder ),
     inputFileName: ini.GetString( "files", "inputFileName", "input" ),
-    inputFileFormat: ini.GetString( "files", "inputFileFormat", "txt" ),
     addTimestampToResultsFiles: ini.GetBool( "files", "addTimestampToResultsFiles", 1 ),
     resultsFilesName: ini.GetString( "files", "resultsFilesName", "result" ),
     roundingPrecision: ini.GetInt( "files", "roundingPrecision", 2 ),
@@ -481,7 +472,6 @@ function iniConfigConstructor( iniPath, fso ){
   //Files
   ini.WriteString( "files", "inputFileLocation", config.inputFileLocation );
   ini.WriteString( "files", "inputFileName", config.inputFileName );
-  ini.WriteString( "files", "inputFileFormat", config.inputFileFormat );
   ini.WriteBool( "files", "addTimestampToResultsFiles", config.addTimestampToResultsFiles );
   ini.WriteString( "files", "resultsFilesName", config.resultsFilesName );
   ini.WriteInt( "files", "roundingPrecision", config.roundingPrecision );
