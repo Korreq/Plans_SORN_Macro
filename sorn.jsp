@@ -1,5 +1,5 @@
 //BEFORE RUNNING MAKE SURE TO CHANGE configurationFileLocation VARIABLE TO LOCATION OF THE CONFIGURATION FILE
-var configurationFileLocation = "C:\\Users\\lukas\\Documents\\Github\\Plans_SORN_Macro\\files";
+var configurationFileLocation = "C:\\Users\\user\\example";
 
 /*  
   Description:
@@ -9,7 +9,7 @@ var configurationFileLocation = "C:\\Users\\lukas\\Documents\\Github\\Plans_SORN
     First file is for voltage change results, second is for reactive power changes.    
     Then for each found generator, increases it's set voltage by value from configuration file and 
     writes it's new value with new calculated values of each element/node into files.       
-    Similarly for each transformer except changeing tap by one to increase it's voltage. 
+    Similarly for each transformer except changeing tap by one to change it's voltage. 
     After succesfully writing results into files, macro shows in a message window time it took to be done.
 
   Writing nodes names in an input file:
@@ -42,7 +42,9 @@ var configurationFileLocation = "C:\\Users\\lukas\\Documents\\Github\\Plans_SORN
       areaId - nodes only from this area will be found, 
       minRatedVoltage - nodes that are rated less than specified will not be found,
       nodeCharIndex and nodeChar - this options are for skiping nodes connecting generators to main nodes e.g. YABC123,
-      skipFakeNodes - nodes that end on 55 which due to model implementation in plans don't have real representation
+      skipFakeNodes - nodes that end on 55 which due to model implementation in plans don't have real representation,
+      skipGeneratorsConnectedToNodesTypeOne - don't add generators that are connected directly or indirectly to nodes of type 1
+      skipGeneratorsWithoutTransformers - Don't add generators that don't have transformer directly connected to it
 */
 
 //Creating file operation object
@@ -114,6 +116,7 @@ for( var i = 1; i < Data.N_Gen; i++ ){
     
     node = ( node.Name === branch.EndName ) ? NodArray.Find( branch.BegName ) : NodArray.Find( branch.EndName );
   }
+
   else if( config.skipGeneratorsWithoutTransformers ) continue;
    
   //Add valid generators to arrays. Constrains:

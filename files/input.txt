@@ -1,8 +1,1 @@
-[a-z],
-ZRC,GBL,GDP,
-
- GDA  ,
-   dun..5
-
-
-
+[a-z]
