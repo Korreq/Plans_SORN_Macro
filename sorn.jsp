@@ -1,5 +1,9 @@
 //BEFORE RUNNING MAKE SURE TO CHANGE configurationFileLocation VARIABLE TO LOCATION OF THE CONFIGURATION FILE
-var configurationFileLocation = "C:\\Users\\user\\example";
+var configurationFileLocation = "C:\\Users\\lukas\\Documents\\Github\\Plans_SORN_Macro\\files\\";
+
+//
+//TODO: make results file delimiter an option in a config file
+//
 
 /*  
   Description:
@@ -63,7 +67,7 @@ var time = getTime();
 
 var nodes = [], elements = [], baseElementsReactPow = [], baseNodesVolt = [];
 
-var node = element = transformer = branch = react = elementBaseValue = null;
+var node = element = transformer = branch = react = elementBaseValue = type = null;
 
 //Setting power flow calculation settings with settings from config file
 setPowerFlowSettings( config );
@@ -88,7 +92,7 @@ for( var i = 1; i < Data.N_Nod; i++ ){
   //matching area ( if not set to 0 ), connected, not generator's node, higher voltage setpoint than specified in configure file, 
   //node contains one of names from input file
   if( 
-    ( node.Area === config.areaId || node.Area <= 0 ) && 
+    ( node.Area === config.areaId || config.areaId <= 0 ) && 
 
     node.St > 0 && node.Name.charAt( config.nodeCharIndex ) != config.nodeChar && 
 
@@ -101,6 +105,8 @@ for( var i = 1; i < Data.N_Nod; i++ ){
   }
 
 }
+
+type = "Generator";
 
 //Fill elements array with valid generators and connected nodes. 
 //Also fills baseElementsReactPow with generators reactive power and baseElementsNodesPow with connected nodes power
@@ -123,17 +129,19 @@ for( var i = 1; i < Data.N_Gen; i++ ){
   //Minimal reactive power is not equal or higher than maximum reactive power, matches area ( if not set to 0 ), 
   //generator's node contains one of names from input file 
   if( 
-    element.Qmin < element.Qmax && element.St > 0 && ( node.Area === config.areaId || node.Area <= 0 ) && 
+    element.Qmin < element.Qmax && element.St > 0 && ( node.Area === config.areaId || config.areaId <= 0 ) && 
 
     isStringMatchingRegexArray( strip( node.Name ), inputArray ) 
   ){   
   
-    elements.push( [ element, node ] );
+    elements.push( [ element, type, node ] );
     
     baseElementsReactPow.push( element.Qg );
   }
    
 }
+
+type = "Transformer";
 
 //Add valid transformers to arrays with coresponding node and branch. Constrains:
 //Transformer must be connected to node from nodes array, have more than 1 tap, not already in elements array
@@ -155,7 +163,7 @@ for( i in nodes ){
     
       branch = BraArray.Find( transformer.Name );
 
-      elements.push( [ transformer, node, branch ] );
+      elements.push( [ transformer, type, node, branch ] );
       
       if( node.Name === transformer.EndName ) baseElementsReactPow.push( branch.Qend );
       
@@ -170,7 +178,7 @@ for( i in nodes ){
 var files = [ createFile( "Q", config, fso ), createFile( "V", config, fso ) ];
 
 //Write headers and base values for each element/node to coresponding file 
-for( var i = 0; i < files.length; i++ ) files[ i ].Write( "Elements;Old U_G / Tap;New U_G / Tap;" );
+for( var i = 0; i < files.length; i++ ) files[ i ].Write( "Elements,Type,Old U_G/Tap,New U_G/Tap," );
 
 //Writes for each element it's node react power 
 writeDataToFile( config, files[ 0 ], elements, baseElementsReactPow );
@@ -184,10 +192,10 @@ if( SaveTempBIN( tmpFile ) < 1 ) errorThrower( "Unable to create temporary file"
 //For each element make some change depending on type of elemenet, then write results into result files
 for( i in elements ){ 
   
-  element = elements[ i ][ 0 ], node = elements[ i ][ 1 ];
+  element = elements[ i ][ 0 ], node = elements[ i ][ 2 ];
   
   //If array element have a branch then try to switch tap up. If transformer is on it's last tap then change it down. 
-  if( elements[ i ][ 2 ] ){
+  if( elements[ i ][ 3 ] ){
     
     elementBaseValue = element.Stp0;
 
@@ -209,11 +217,11 @@ for( i in elements ){
   for( var j = 0; j < files.length; j++ ){
 
     //Write element's name, it's base connected node power / tap number and new connected node power / tap number
-    if( elements[ i ][ 2 ] ) files[ j ].Write( strip( element.Name ) + ";" + elementBaseValue + ";" + element.Stp0 + ";" );
+    if( elements[ i ][ 3 ] ) files[ j ].Write( strip( element.Name ) + "," + elements[ i ][ 1 ] + "," + elementBaseValue + "," + element.Stp0 + "," );
   
     else files[ j ].Write( 
-      strip( element.Name ) + ";" + elementBaseValue + ";" + 
-      roundTo( node.Vs, config.roundingPrecision ) + ";" 
+      strip( element.Name ) + "," + elements[ i ][ 1 ] + "," + elementBaseValue + "," + 
+      roundTo( node.Vs, config.roundingPrecision ) + "," 
     );
   }
 
@@ -221,21 +229,28 @@ for( i in elements ){
   for( j in elements ){
 
     //Check if element have a branch, if true use reactive power from matching branch end
-    if( elements[ j ][ 2 ] ){
+    if( elements[ j ][ 3 ] ){
 
-      react = ( elements[ j ][ 0 ].begName === elements[ j ][ 1 ].Name ) ? elements[ j ][ 2 ].Qbeg : elements[ j ][ 2 ].Qend;
+      react = ( elements[ j ][ 0 ].begName === elements[ j ][ 2 ].Name ) ? elements[ j ][ 3 ].Qbeg : elements[ j ][ 3 ].Qend;
     } 
 
     else react = elements[ j ][ 0 ].Qg;
   
-    files[ 0 ].Write( roundTo( react, config.roundingPrecision ) + ";" );
+    files[ 0 ].Write( roundTo( react, config.roundingPrecision ) + "" );
+    
+    if( j != elements.length - 1 ) files[ 0 ].Write( "," );
   }
   
   //Write for each node it's new voltage
-  for( j in nodes ) files[ 1 ].Write( roundTo( nodes[ j ].Vi, config.roundingPrecision ) + ";" );
+  for( j in nodes ){ 
+  
+    files[ 1 ].Write( roundTo( nodes[ j ].Vi, config.roundingPrecision ) + "" ); 
+  
+    if(j != nodes.length - 1) files[ 1 ].Write( "," );  
+  }
 
   //Add end line character to each file
-  for( var j = 0; j < files.length; j++ ) files[ j ].WriteLine("");
+  if( i != elements.length - 1 ) for( var j = 0; j < files.length; j++ ) files[ j ].WriteLine("");
 
   //Load model without any changes to transformators
   ReadTempBIN( tmpFile );
@@ -331,15 +346,23 @@ function isElementInArrayByName( array, elementName ){
 //Function writes to specifed file objects names and corresponding data
 function writeDataToFile( config, file, objectArray, dataArray ){
 
-  var text = "Base;X;X;";
+  var text = "Base,X,X,X,";
   
   for( i in objectArray ){
   
-    if( objectArray[ i ][ 0 ] ) file.Write( strip( objectArray[ i ][ 0 ].Name ) + ";" );
+    if( objectArray[ i ][ 0 ] ) file.Write( strip( objectArray[ i ][ 0 ].Name ) );
 
-    else file.Write( strip( objectArray[ i ].Name ) + ";" );
+    else file.Write( strip( objectArray[ i ].Name ) );
     
-    text += roundTo( dataArray[ i ], config.roundingPrecision ) + ";";
+    text += roundTo( dataArray[ i ], config.roundingPrecision );
+    
+    if( i != objectArray.length - 1 ){ 
+      
+      file.Write( "," ); 
+      
+      text += ",";
+    }
+    
   }
 
   file.WriteLine( "\n" + text );
@@ -352,7 +375,7 @@ function createFolder( config, fso ){
   if( !config ) errorThrower( "Unable to load configuration" );
   
   var folder = config.folderName;
-  var folderPath = config.homeFolder + folder;
+  var folderPath = config.homeFolder + "\\" + folder;
   
   if( !fso.FolderExists( folderPath ) ){
     
@@ -375,8 +398,8 @@ function createFile( name, config, fso ){
   
   var folder = ( config.createResultsFolder == 1 ) ? createFolder( config, fso ) : "";
   var timeStamp = ( config.addTimestampToResultsFiles == 1 ) ? getCurrentDate() + "--" : "";
-  var fileLocation = config.homeFolder + folder + timeStamp + config.resultsFilesName + name + ".csv";
-  
+  var fileLocation = config.homeFolder + "\\" + folder + timeStamp + config.resultsFilesName + name + ".csv";
+    
   try{ file = fso.CreateTextFile( fileLocation ); }
   
   catch( e ){ errorThrower( "File already exists or unable to create it" ); }
@@ -392,8 +415,8 @@ function readFile( config, fso ){
 
   var file = null;
 
-  var fileLocation = config.inputFileLocation + config.inputFileName;
-  
+  var fileLocation = config.inputFileLocation + "\\" + config.inputFileName;
+    
   try{ file = fso.OpenTextFile( fileLocation, 1, false, 0 ); }
 
   catch( e ){ errorThrower( "Unable to find or open file" ); }
