@@ -1,9 +1,18 @@
 //BEFORE RUNNING MAKE SURE TO CHANGE configurationFileLocation VARIABLE TO LOCATION OF THE CONFIGURATION FILE
 var configurationFileLocation = "C:\\Users\\lukas\\Documents\\Github\\Plans_SORN_Macro\\files\\";
 
-//
-//TODO: make results file delimiter an option in a config file
-//
+/*
+  TODO: 
+
+  [X]Transformer data: min tap, max tap, current tap, tap direction
+  [X]Generator data: min/max/current voltage, min/max/current rective power
+  [X]Node data: min/max/current voltage, min/max/current rective power
+
+  Remade results files to show delta of the change
+
+  Using python script import said files to sqlite and create database with all of data
+
+*/
 
 /*  
   Description:
@@ -80,6 +89,10 @@ var inputFile = readFile( config, fso );
 var inputArray = getInputArray( inputFile );
 inputFile.close();
 
+var nodesFile = createFile( "nodes", config, fso );
+
+nodesFile.WriteLine( "nodes,min_voltage,current_voltage,max_voltage" );
+
 //Fill node and baseNodesVolt arrays with nodes that matches names from input array
 for( var i = 1; i < Data.N_Nod; i++ ){
 
@@ -99,12 +112,20 @@ for( var i = 1; i < Data.N_Nod; i++ ){
     node.Vn >= config.minRatedVoltage && isStringMatchingRegexArray( strip( node.Name ), inputArray ) 
   ){ 
      
+    nodesFile.WriteLine( strip( node.Name ) + "," + node.Vmin + "," + roundTo( node.Vi, config.roundingPrecision ) + "," + node.Vmax );
+
     nodes.push( node );
     
     baseNodesVolt.push( node.Vi );
   }
 
 }
+
+nodesFile.close();
+
+var generatorsFile = createFile( "generators", config, fso );
+
+generatorsFile.WriteLine( "generators,min_active_power,current_active_power,max_active_power,min_reactive_power,current_reactive_power,max_reactive_power" );
 
 type = "Generator";
 
@@ -133,13 +154,22 @@ for( var i = 1; i < Data.N_Gen; i++ ){
 
     isStringMatchingRegexArray( strip( node.Name ), inputArray ) 
   ){   
-  
+
+    generatorsFile.WriteLine( strip( element.Name ) + "," + element.Pmin + "," + roundTo( node.Pg, config.roundingPrecision ) 
+    + "," + node.Pmax + "," + element.Qmin + "," + roundTo( element.Qg, config.roundingPrecision ) + "," + element.Qmax );
+
     elements.push( [ element, type, node ] );
     
     baseElementsReactPow.push( element.Qg );
   }
    
 }
+
+generatorsFile.close();
+
+var transformersFile = createFile( "transformers", config, fso )
+
+transformersFile.WriteLine( "transformers,min_tap,current_tap,max_tap, regulation_step" ); 
 
 type = "Transformer";
 
@@ -161,6 +191,15 @@ for( i in nodes ){
         !isElementInArrayByName( elements, transformer.Name ) && transformer.Lstp > 1 
     ){
     
+      var minTap = maxTap = null;
+
+      if( transformer.TapLoc === 1 ){ minTap = 1, maxTap = transformer.Lstp; }
+
+      else{ minTap = transformer.Lstp, maxTap = 1 }
+      
+      transformersFile.WriteLine( strip( transformer.name ) + "," + minTap + "," + transformer.Stp0 + "," + maxTap + 
+      "," + roundTo( transformer.dUstp, config.roundingPrecision ) );
+
       branch = BraArray.Find( transformer.Name );
 
       elements.push( [ transformer, type, node, branch ] );
@@ -173,6 +212,8 @@ for( i in nodes ){
   }
 
 }
+
+transformersFile.close();
 
 //Create result files and folder using settings from a config file
 var files = [ createFile( "Q", config, fso ), createFile( "V", config, fso ) ];
