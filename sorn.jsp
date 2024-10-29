@@ -8,7 +8,7 @@ var configurationFileLocation = "C:\\Users\\lukas\\Documents\\Github\\Plans_SORN
   [X]Generator data: min/max/current voltage, min/max/current rective power
   [X]Node data: min/max/current voltage, min/max/current rective power
 
-  Remade results files to show delta of the change
+  [X]Remade results files to show delta of the change
 
   Using python script import said files to sqlite and create database with all of data
 
@@ -76,7 +76,7 @@ var time = getTime();
 
 var nodes = [], elements = [], baseElementsReactPow = [], baseNodesVolt = [];
 
-var node = element = transformer = branch = react = elementBaseValue = type = null;
+var node = element = transformer = branch = react = elementBaseValue = null;
 
 //Setting power flow calculation settings with settings from config file
 setPowerFlowSettings( config );
@@ -112,7 +112,8 @@ for( var i = 1; i < Data.N_Nod; i++ ){
     node.Vn >= config.minRatedVoltage && isStringMatchingRegexArray( strip( node.Name ), inputArray ) 
   ){ 
      
-    nodesFile.WriteLine( strip( node.Name ) + "," + node.Vmin + "," + roundTo( node.Vi, config.roundingPrecision ) + "," + node.Vmax );
+    nodesFile.WriteLine( strip( node.Name ) + "," + roundTo( node.Vmin, config.roundingPrecision ) + "," + 
+    roundTo( node.Vi, config.roundingPrecision ) + "," + roundTo( node.Vmax, config.roundingPrecision ) );
 
     nodes.push( node );
     
@@ -125,9 +126,7 @@ nodesFile.close();
 
 var generatorsFile = createFile( "generators", config, fso );
 
-generatorsFile.WriteLine( "generators,min_active_power,current_active_power,max_active_power,min_reactive_power,current_reactive_power,max_reactive_power" );
-
-type = "Generator";
+generatorsFile.WriteLine( "generators,min_active_power,current_active_power,max_active_power,min_reactive_power,current_reactive_power,max_reactive_power,connected_node" );
 
 //Fill elements array with valid generators and connected nodes. 
 //Also fills baseElementsReactPow with generators reactive power and baseElementsNodesPow with connected nodes power
@@ -155,10 +154,12 @@ for( var i = 1; i < Data.N_Gen; i++ ){
     isStringMatchingRegexArray( strip( node.Name ), inputArray ) 
   ){   
 
-    generatorsFile.WriteLine( strip( element.Name ) + "," + element.Pmin + "," + roundTo( node.Pg, config.roundingPrecision ) 
-    + "," + node.Pmax + "," + element.Qmin + "," + roundTo( element.Qg, config.roundingPrecision ) + "," + element.Qmax );
+    generatorsFile.WriteLine( strip( element.Name ) + "," + roundTo( element.Pmin, config.roundingPrecision ) + "," + 
+    roundTo( element.Pg, config.roundingPrecision ) + "," + roundTo( element.Pmax, config.roundingPrecision ) + "," + 
+    roundTo( element.Qmin, config.roundingPrecision ) + "," + roundTo( element.Qg, config.roundingPrecision ) + "," + 
+    roundTo( element.Qmax, config.roundingPrecision ) + "," + strip( node.Name ) );
 
-    elements.push( [ element, type, node ] );
+    elements.push( [ element, node ] );
     
     baseElementsReactPow.push( element.Qg );
   }
@@ -169,9 +170,7 @@ generatorsFile.close();
 
 var transformersFile = createFile( "transformers", config, fso )
 
-transformersFile.WriteLine( "transformers,min_tap,current_tap,max_tap, regulation_step" ); 
-
-type = "Transformer";
+transformersFile.WriteLine( "transformers,min_tap,current_tap,max_tap, regulation_step, connected_node" ); 
 
 //Add valid transformers to arrays with coresponding node and branch. Constrains:
 //Transformer must be connected to node from nodes array, have more than 1 tap, not already in elements array
@@ -197,12 +196,12 @@ for( i in nodes ){
 
       else{ minTap = transformer.Lstp, maxTap = 1 }
       
-      transformersFile.WriteLine( strip( transformer.name ) + "," + minTap + "," + transformer.Stp0 + "," + maxTap + 
-      "," + roundTo( transformer.dUstp, config.roundingPrecision ) );
+      transformersFile.WriteLine( strip( transformer.name ) + "," + minTap + "," + transformer.Stp0 + "," + maxTap + "," + 
+      roundTo( transformer.dUstp, config.roundingPrecision ) + "," + node.Name );
 
       branch = BraArray.Find( transformer.Name );
 
-      elements.push( [ transformer, type, node, branch ] );
+      elements.push( [ transformer, node, branch ] );
       
       if( node.Name === transformer.EndName ) baseElementsReactPow.push( branch.Qend );
       
@@ -216,10 +215,10 @@ for( i in nodes ){
 transformersFile.close();
 
 //Create result files and folder using settings from a config file
-var files = [ createFile( "Q", config, fso ), createFile( "V", config, fso ) ];
+var files = [ createFile( "q", config, fso ), createFile( "v", config, fso ) ];
 
 //Write headers and base values for each element/node to coresponding file 
-for( var i = 0; i < files.length; i++ ) files[ i ].Write( "Elements,Type,Old U_G/Tap,New U_G/Tap," );
+for( var i = 0; i < files.length; i++ ) files[ i ].Write( "Elements,U_G/Tap Difference," );
 
 //Writes for each element it's node react power 
 writeDataToFile( config, files[ 0 ], elements, baseElementsReactPow );
@@ -233,10 +232,10 @@ if( SaveTempBIN( tmpFile ) < 1 ) errorThrower( "Unable to create temporary file"
 //For each element make some change depending on type of elemenet, then write results into result files
 for( i in elements ){ 
   
-  element = elements[ i ][ 0 ], node = elements[ i ][ 2 ];
+  element = elements[ i ][ 0 ], node = elements[ i ][ 1 ];
   
   //If array element have a branch then try to switch tap up. If transformer is on it's last tap then change it down. 
-  if( elements[ i ][ 3 ] ){
+  if( elements[ i ][ 2 ] ){
     
     elementBaseValue = element.Stp0;
 
@@ -255,29 +254,28 @@ for( i in elements ){
   //Calculate power flow, if fails try to load original model and throw error 
   if( CalcLF() != 1 ) safeErrorThrower( "Power Flow calculation failed", tmpOgFile );
 
+  var difference = ( elements[ i ][ 2 ] ) ? element.Stp0 - elementBaseValue : roundTo( node.Vs - elementBaseValue, config.roundingPrecision );
+  
   for( var j = 0; j < files.length; j++ ){
 
-    //Write element's name, it's base connected node power / tap number and new connected node power / tap number
-    if( elements[ i ][ 3 ] ) files[ j ].Write( strip( element.Name ) + "," + elements[ i ][ 1 ] + "," + elementBaseValue + "," + element.Stp0 + "," );
+    //Write element's name, it's difference of connected node power / tap number to base
+    if( elements[ i ][ 2 ] ) files[ j ].Write( strip( element.Name )  + "," + difference + "," );
   
-    else files[ j ].Write( 
-      strip( element.Name ) + "," + elements[ i ][ 1 ] + "," + elementBaseValue + "," + 
-      roundTo( node.Vs, config.roundingPrecision ) + "," 
-    );
+    else files[ j ].Write( strip( element.Name ) + "," + difference + "," );
   }
 
   //Write for each element it's new reactive power
   for( j in elements ){
 
     //Check if element have a branch, if true use reactive power from matching branch end
-    if( elements[ j ][ 3 ] ){
+    if( elements[ j ][ 2 ] ){
 
-      react = ( elements[ j ][ 0 ].begName === elements[ j ][ 2 ].Name ) ? elements[ j ][ 3 ].Qbeg : elements[ j ][ 3 ].Qend;
+      react = ( elements[ j ][ 0 ].begName === elements[ j ][ 1 ].Name ) ? elements[ j ][ 2 ].Qbeg : elements[ j ][ 2 ].Qend;
     } 
 
     else react = elements[ j ][ 0 ].Qg;
   
-    files[ 0 ].Write( roundTo( react, config.roundingPrecision ) + "" );
+    files[ 0 ].Write( roundTo( react - baseElementsReactPow[ j ], config.roundingPrecision ) + "" );
     
     if( j != elements.length - 1 ) files[ 0 ].Write( "," );
   }
@@ -285,7 +283,7 @@ for( i in elements ){
   //Write for each node it's new voltage
   for( j in nodes ){ 
   
-    files[ 1 ].Write( roundTo( nodes[ j ].Vi, config.roundingPrecision ) + "" ); 
+    files[ 1 ].Write( roundTo( nodes[ j ].Vi - baseNodesVolt[ j ], config.roundingPrecision ) + "" ); 
   
     if(j != nodes.length - 1) files[ 1 ].Write( "," );  
   }
@@ -387,7 +385,7 @@ function isElementInArrayByName( array, elementName ){
 //Function writes to specifed file objects names and corresponding data
 function writeDataToFile( config, file, objectArray, dataArray ){
 
-  var text = "Base,X,X,X,";
+  //var text = "Base,X,";
   
   for( i in objectArray ){
   
@@ -395,6 +393,7 @@ function writeDataToFile( config, file, objectArray, dataArray ){
 
     else file.Write( strip( objectArray[ i ].Name ) );
     
+    /*
     text += roundTo( dataArray[ i ], config.roundingPrecision );
     
     if( i != objectArray.length - 1 ){ 
@@ -403,10 +402,11 @@ function writeDataToFile( config, file, objectArray, dataArray ){
       
       text += ",";
     }
-    
+    */
   }
 
-  file.WriteLine( "\n" + text );
+  file.WriteLine( "" );
+  //file.WriteLine( "\n" + text );
 }
 
 //Function takes config object and depending on it's config creates folder in specified location. 
@@ -439,7 +439,7 @@ function createFile( name, config, fso ){
   
   var folder = ( config.createResultsFolder == 1 ) ? createFolder( config, fso ) : "";
   var timeStamp = ( config.addTimestampToResultsFiles == 1 ) ? getCurrentDate() + "--" : "";
-  var fileLocation = config.homeFolder + "\\" + folder + timeStamp + config.resultsFilesName + name + ".csv";
+  var fileLocation = config.homeFolder + "\\" + folder + timeStamp + name + ".csv";
     
   try{ file = fso.CreateTextFile( fileLocation ); }
   
@@ -505,7 +505,6 @@ function iniConfigConstructor( iniPath, fso ){
     inputFileLocation: ini.GetString( "files", "inputFileLocation", hFolder ),
     inputFileName: ini.GetString( "files", "inputFileName", "input" ),
     addTimestampToResultsFiles: ini.GetBool( "files", "addTimestampToResultsFiles", 1 ),
-    resultsFilesName: ini.GetString( "files", "resultsFilesName", "result" ),
     roundingPrecision: ini.GetInt( "files", "roundingPrecision", 2 ),
     
     //Power Flow
@@ -540,7 +539,6 @@ function iniConfigConstructor( iniPath, fso ){
   ini.WriteString( "files", "inputFileLocation", config.inputFileLocation );
   ini.WriteString( "files", "inputFileName", config.inputFileName );
   ini.WriteBool( "files", "addTimestampToResultsFiles", config.addTimestampToResultsFiles );
-  ini.WriteString( "files", "resultsFilesName", config.resultsFilesName );
   ini.WriteInt( "files", "roundingPrecision", config.roundingPrecision );
     
   //Power Flow
