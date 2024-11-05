@@ -91,7 +91,7 @@ inputFile.close();
 
 var nodesFile = createFile( "nodes", config, fso );
 
-nodesFile.WriteLine( "nodes,min_voltage,current_voltage,max_voltage" );
+nodesFile.WriteLine( "name,min_voltage,current_voltage,max_voltage" );
 
 //Fill node and baseNodesVolt arrays with nodes that matches names from input array
 for( var i = 1; i < Data.N_Nod; i++ ){
@@ -126,7 +126,7 @@ nodesFile.close();
 
 var generatorsFile = createFile( "generators", config, fso );
 
-generatorsFile.WriteLine( "generators,min_active_power,current_active_power,max_active_power,min_reactive_power,current_reactive_power,max_reactive_power,connected_node" );
+generatorsFile.WriteLine( "name,min_active_power,current_active_power,max_active_power,min_reactive_power,current_reactive_power,max_reactive_power,connected_node" );
 
 //Fill elements array with valid generators and connected nodes. 
 //Also fills baseElementsReactPow with generators reactive power and baseElementsNodesPow with connected nodes power
@@ -170,7 +170,7 @@ generatorsFile.close();
 
 var transformersFile = createFile( "transformers", config, fso )
 
-transformersFile.WriteLine( "transformers,min_tap,current_tap,max_tap, regulation_step, connected_node" ); 
+transformersFile.WriteLine( "name,min_tap,current_tap,max_tap, regulation_step, connected_node" ); 
 
 //Add valid transformers to arrays with coresponding node and branch. Constrains:
 //Transformer must be connected to node from nodes array, have more than 1 tap, not already in elements array

@@ -1,0 +1,3 @@
+name,min_active_power,current_active_power,max_active_power,min_reactive_power,current_reactive_power,max_reactive_power,connected_node
+ZRN_4-01,-210,0,195,-99.458,16.064,200,ZRC415
+ZRN_4-02,-190,0,195,-99.458,16.839,200,ZRC415
