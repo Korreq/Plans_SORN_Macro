@@ -1,2 +1,5 @@
 # csv files with confidential data
 results/
+
+# ignore all bin files ( temporary files for plans models )
+*.bin

@@ -82,8 +82,6 @@ createFile( "transformers", config, fso ), createFile( "q", config, fso ), creat
 
 buffer = "name,min_voltage,current_voltage,max_voltage\n";
 
-//resultFiles[ 0 ].WriteLine( "name,min_voltage,current_voltage,max_voltage" );
-
 //Fill node and baseNodesVolt arrays with nodes that matches names from input array
 for( var i = 1; i < Data.N_Nod; i++ ){
 
@@ -102,11 +100,10 @@ for( var i = 1; i < Data.N_Nod; i++ ){
 
     node.Vn >= config.minRatedVoltage && isStringMatchingRegexArray( strip( node.Name ), inputArray ) 
   ){ 
+
     buffer += strip( node.Name ) + "," + roundTo( node.Vmin, config.roundingPrecision ) + "," + 
     roundTo( node.Vi, config.roundingPrecision ) + "," + roundTo( node.Vmax, config.roundingPrecision ) + "\n";
-    //resultFiles[ 0 ].WriteLine( strip( node.Name ) + "," + roundTo( node.Vmin, config.roundingPrecision ) + "," + 
-    //roundTo( node.Vi, config.roundingPrecision ) + "," + roundTo( node.Vmax, config.roundingPrecision ) );
-
+   
     nodes.push( node );
     
     baseNodesVolt.push( node.Vi );
@@ -118,7 +115,6 @@ resultFiles[ 0 ].Write( buffer );
 resultFiles[ 0 ].close();
 
 buffer = "name,min_active_power,current_active_power,max_active_power,min_reactive_power,current_reactive_power,max_reactive_power,connected_node\n"
-//resultFiles[ 1 ].WriteLine( "name,min_active_power,current_active_power,max_active_power,min_reactive_power,current_reactive_power,max_reactive_power,connected_node" );
 
 //Fill elements array with valid generators and connected nodes. 
 //Also fills baseElementsReactPow with generators reactive power and baseElementsNodesPow with connected nodes power
@@ -144,17 +140,13 @@ for( var i = 1; i < Data.N_Gen; i++ ){
     element.Qmin < element.Qmax && element.St > 0 && ( node.Area === config.areaId || config.areaId <= 0 ) && 
 
     isStringMatchingRegexArray( strip( node.Name ), inputArray ) 
-  ){   
+  ){
+
     buffer += strip( element.Name ) + "," + roundTo( element.Pmin, config.roundingPrecision ) + "," + 
     roundTo( element.Pg, config.roundingPrecision ) + "," + roundTo( element.Pmax, config.roundingPrecision ) + "," + 
     roundTo( element.Qmin, config.roundingPrecision ) + "," + roundTo( element.Qg, config.roundingPrecision ) + "," + 
     roundTo( element.Qmax, config.roundingPrecision ) + "," + strip( node.Name ) + "\n";
-    /*
-    resultFiles[ 1 ].WriteLine( strip( element.Name ) + "," + roundTo( element.Pmin, config.roundingPrecision ) + "," + 
-    roundTo( element.Pg, config.roundingPrecision ) + "," + roundTo( element.Pmax, config.roundingPrecision ) + "," + 
-    roundTo( element.Qmin, config.roundingPrecision ) + "," + roundTo( element.Qg, config.roundingPrecision ) + "," + 
-    roundTo( element.Qmax, config.roundingPrecision ) + "," + strip( node.Name ) );
-    */
+   
     elements.push( [ element, node ] );
     
     baseElementsReactPow.push( element.Qg );
@@ -165,11 +157,7 @@ for( var i = 1; i < Data.N_Gen; i++ ){
 resultFiles[ 1 ].Write( buffer );
 resultFiles[ 1 ].close();
 
-buffer = "name,min_tap,current_tap,max_tap, regulation_step, connected_node\n"
-
-//resultFiles[ 2 ].WriteLine( "name,min_tap,current_tap,max_tap, regulation_step, connected_node" ); 
-
-otherNode = null;
+resultFiles[ 2 ].WriteLine( "name,min_tap,current_tap,max_tap, regulation_step, connected_node" ); 
 
 //Add valid transformers to arrays with coresponding node and branch. Constrains:
 //Transformer must be connected to node from nodes array, have more than 1 tap, not already in elements array
@@ -181,15 +169,15 @@ for( i in nodes ){
 
     transformer = TrfArray.Get( j );
      
-    otherNode = ( node.Name == transformer.EndName ) ? NodArray.Find( transformer.BegName ) : NodArray.Find( transformer.EndName );
-    if( otherNode.Vn < config.minRatedVoltage ) continue;
-   
     if( 
         ( node.Name == transformer.EndName || node.Name == transformer.BegName ) && 
 
         transformer.EndName.charAt( config.nodeCharIndex ) != config.nodeChar && transformer.BegName.charAt( config.nodeCharIndex )!= config.nodeChar && 
         
-        !isElementInArrayByName( elements, transformer.Name ) && transformer.Lstp > 1 
+        !isElementInArrayByName( elements, transformer.Name ) && transformer.Lstp > 1 && 
+        
+        transformer.Vn2 >= config.minRatedVoltage && transformer.Vn1 >= config.minRatedVoltage
+
     ){
 
       var minTap = maxTap = null;
@@ -198,13 +186,11 @@ for( i in nodes ){
 
       else{ minTap = transformer.Lstp, maxTap = 1 }
       
-      buffer += strip( transformer.name ) + "," + minTap + "," + transformer.Stp0 + "," + maxTap + "," + 
-      roundTo( transformer.dUstp, config.roundingPrecision ) + "," + node.Name + "\n";
+      resultFiles[ 2 ].WriteLine( strip( transformer.name ) + "," + minTap + "," + transformer.Stp0 + "," + maxTap + "," + 
+      roundTo( transformer.dUstp, config.roundingPrecision ) + "," + node.Name );
       
-      //resultFiles[ 2 ].WriteLine( strip( transformer.name ) + "," + minTap + "," + transformer.Stp0 + "," + maxTap + "," + 
-      //roundTo( transformer.dUstp, config.roundingPrecision ) + "," + node.Name );
-      
-      branch = BraArray.Find( transformer.Name );
+      branch = BraArray.Get( transformer.NrBra );
+      //branch = BraArray.Find( transformer.Name );
 
       elements.push( [ transformer, node, branch ] );
       
@@ -217,7 +203,6 @@ for( i in nodes ){
 
 }
 
-resultFiles[ 2 ].Write( buffer );
 resultFiles[ 2 ].close();
 
 //Writes to file headers and elements name
@@ -279,8 +264,6 @@ for( i in elements ){
     buffer += roundTo( react - baseElementsReactPow[ j ], config.roundingPrecision ) + ",";
   }
   
-  //bufferQ += removeLastChar( bufferQ ) + "\n";
-
   resultFiles[ 3 ].WriteLine( removeLastChar( buffer ) );
 
   //Write element's name, it's difference of connected node power / tap number to base
