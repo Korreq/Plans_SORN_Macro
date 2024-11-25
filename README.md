@@ -1,44 +1,43 @@
 # Plans_SORN_Macro
- Description:
-  
-    Macro gets nodes' name from input file, then searches through nodes to find connected transformers and generators ( directly or through Y - node ).
-    Before any changes original values for each nodes and elements are written with their names into both output files. 
-    First file is for voltage change results, second is for reactive power changes.    
-    Then for each found generator, increases it's set voltage by value from configuration file and 
-    writes it's new value with new calculated values of each element/node into files.       
-    Similarly for each transformer except changeing tap by one to change it's voltage. 
-    After succesfully writing results into files, macro shows in a message window time it took to be done.
 
-  Writing nodes names in an input file:
-  
-    Nodes are searched by function using regex. It matches input from start of string and is case-insensitive.
-    E.g. we have these nodes: ABC111, ABC222, ABC555, BAC234, BAC235, BAC124, ABCA123, CABC345, ZABC111.
-    If we want all nodes containing name "ABC" and "BAC" then in input file we can write: 
-  
-    ABC, bac
-  
-    White spaces dosen't matter, macro splits input by ',' if we forget to add ',' between searched strings:
-  
-    ABC bac 
-  
-    Macro will search for nodes containing "ABCBAC".
-    If we want to find nodes ABC111, ABC222 and only them, then we can write:
-  
-    ABC111, ABC222
-  
-    Macro will only find ABC111, ABC222 nodes.
-  
-    Thakns to regex support we are able to find more specific nodes. E.g. we want to find all BAC nodes ending with 4:
-  
-    bac..4
-  
-    Will find nodes BAC234 and BAC124.
-  
-    In configuration file there are options that can block finding some nodes:
-  
-      areaId - nodes only from this area will be found, 
-      minRatedVoltage - nodes that are rated less than specified will not be found,
-      nodeCharIndex and nodeChar - this options are for skiping nodes connecting generators to main nodes e.g. YABC123,
-      skipFakeNodes - nodes that end on 55 which due to model implementation in plans don't have real representation
-      skipGeneratorsConnectedToNodesTypeOne - don't add generators that are connected directly or indirectly to nodes of type 1
-      skipGeneratorsWithoutTransformers - Don't add generators that don't have transformer directly connected to it
+Overview
+
+This project is a macro script written in JavaScript that retrieves node names from an input file, searches for connected transformers and generators, and writes original values to output files. It then updates generator voltages and transformer taps, recalculates values, and writes the results to output files.
+
+
+Configuration
+
+The script uses a configuration file (config.ini) to specify various options, such as:
+
+* Input file location and name
+* Output file location and name
+* Area ID and minimum rated voltage for node filtering
+* Options for skipping fake nodes, generators connected to nodes of type 1, and generators without transformers
+
+
+Input File
+
+The input file (input.txt) contains a list of node names to search for, separated by commas. The script uses regular expressions to match the input strings with node names in the project.
+
+
+Output Files
+The script generates five output files:
+
+  * Nodes file
+  * Generators file
+  * Transformers file
+  * Node Voltage Changes for each element file
+  * Elements Reactive Power Changes for each element file
+
+Usage
+
+1. Update the config.ini file with the desired configuration options.
+2. Create an input.txt file containing the list of node names to search for.
+3. Run the sorn.js script.
+4. The script will generate the output files in the specified location.
+
+
+Notes
+
+* The script uses the fso object to interact with the file system.
+* The script throws errors if the configuration file or input file cannot be loaded or opened.
