@@ -41,9 +41,8 @@ if( SaveTempBIN( tmpOgFile ) < 1 ) errorThrower( "Unable to create temporary fil
 // Record the macro's start time
 var time = getTime();
 
-// Initialize arrays and variables
+// Initialize arrays
 var nodes = [], elements = [], baseElementsReactPow = [], baseNodesVolt = [];
-var node = element = transformer = branch = react = elementBaseValue = difference = buffer = null;
 
 // Set power flow calculation settings using the configuration file
 setPowerFlowSettings( config );
@@ -57,161 +56,40 @@ var inputArray = getInputArray( inputFile );
 inputFile.close();
 
 // Create result files and folder using settings from a config file
-var resultFiles = [ createFile( "nodes", config, fso ), createFile( "generators", config, fso ), 
-createFile( "transformers", config, fso ), createFile( "q", config, fso ), createFile( "v", config, fso ) ];
-
-// Fills node file ( resultFiles[ 0 ] ) with all nodes from the specified area
-// that have a higher voltage setpoint than specified in the configuration file
-// and contain one of the names from the input file
-// Also fills nodes array with nodes that were written to the file
-// and baseNodesVolt with the base voltage of the nodes
-buffer = "name,min_voltage,current_voltage,max_voltage\n";
-
-// Loop through all nodes in the project
-for( var i = 1; i < Data.N_Nod; i++ ){
-
-  node = NodArray.Get( i );
+//var resultFiles = [ createFile( "nodes", config, fso ), createFile( "generators", config, fso ), 
+//createFile( "transformers", config, fso ), createFile( "q", config, fso ), createFile( "v", config, fso ) ];
+var resultFiles = [ createFile( "areas", config, fso ), createFile( "nodes", config, fso ), createFile( "generators", config, fso ), 
+  createFile( "transformers", config, fso ), createFile( "q", config, fso ), createFile( "v", config, fso ) ];
   
-  // If skip fake nodes is set in config, then check if node ends with 55
-  if( config.skipFakeNodes && isStringMatchingRegex( strip( node.Name ), "55$" ) ) continue;
-    
-  // Add node to both arrays that fulfills all conditions:
-  // matching area ( if not set to 0 ), connected, not generator's node, 
-  //higher voltage setpoint than specified in configure file, 
-  // node contains one of names from input file
-  if( 
-    ( node.Area === config.areaId || config.areaId <= 0 ) && 
+// Saves areas with coresponding data to file
+saveAreasToFile( resultFiles[ 0 ], config );
 
-    node.St > 0 && node.Name.charAt( config.nodeCharIndex ) != config.nodeChar && 
+// Fills node file ( resultFiles[ 0 ] ) with valid nodes
+// Also fills nodes array with nodes that were written to the file and 
+// baseNodesVolt with the base voltage of the nodes
+fillNodesArrays(  nodes, baseNodesVolt, inputArray, resultFiles[ 1 ], config );
 
-    node.Vn >= config.minRatedVoltage && isStringMatchingRegexArray( strip( node.Name ), inputArray ) 
-  ){ 
+// Fills generator file ( resultFiles[ 1 ] ) with valid generators and their connected nodes
+// Add valid generators to arrays with coresponding node and
+// baseElementsReactPow with generators reactive power
+fillGeneratorsArrays( elements, baseElementsReactPow, inputArray, resultFiles[ 2 ], config );
 
-    buffer += strip( node.Name ) + "," + roundTo( node.Vmin, config.roundingPrecision ) + "," + 
-    roundTo( node.Vi, config.roundingPrecision ) + "," + roundTo( node.Vmax, config.roundingPrecision ) + "\n";
-   
-    nodes.push( node );
-    
-    baseNodesVolt.push( node.Vi );
-  }
-
-}
-
-resultFiles[ 0 ].Write( buffer );
-resultFiles[ 0 ].close();
-
-// Fills generator file ( resultFiles[ 1 ] ) with valid generators and connected nodes.
-// Also fills baseElementsReactPow with generators reactive power and baseElementsNodesPow with connected nodes power
-buffer = "name,min_active_power,current_active_power,max_active_power,min_reactive_power,current_reactive_power,max_reactive_power,connected_node\n"
-
-// Loop through all generators in the project
-for( var i = 1; i < Data.N_Gen; i++ ){
-
-  // Get generator and node that it's connected to
-  element = GenArray.Get( i ), node = NodArray.Get( element.NrNod );
-  
-  // If skipGeneratorsConnectedToNodesTypeOne is set in config and node is of type 1, skip this generator
-  if( config.skipGeneratorsConnectedToNodesTypeOne && node.Typ === 1 ) continue;
-  
-  // If generator is connected to transformer, get that transformer and the connected node
-  if( element.TrfName ){ 
-  
-    branch = BraArray.Find( element.TrfName );
-    
-    node = ( node.Name === branch.EndName ) ? NodArray.Find( branch.BegName ) : NodArray.Find( branch.EndName );
-  }
-  
-  // If generator is not connected to transformer and skipGeneratorsWithoutTransformers is set in config, skip this generator
-  else if( config.skipGeneratorsWithoutTransformers ) continue;
-   
-  // Add valid generators to arrays. Constrains:
-  // Minimal reactive power is not equal or higher than maximum reactive power, matches area ( if not set to 0 ), 
-  // generator's node contains one of names from input file 
-  if( 
-    element.Qmin < element.Qmax && element.St > 0 && ( node.Area === config.areaId || config.areaId <= 0 ) && 
-
-    isStringMatchingRegexArray( strip( node.Name ), inputArray ) 
-  ){
-
-    // Write generator information to file
-    buffer += strip( element.Name ) + "," + roundTo( element.Pmin, config.roundingPrecision ) + "," + 
-    roundTo( element.Pg, config.roundingPrecision ) + "," + roundTo( element.Pmax, config.roundingPrecision ) + "," + 
-    roundTo( element.Qmin, config.roundingPrecision ) + "," + roundTo( element.Qg, config.roundingPrecision ) + "," + 
-    roundTo( element.Qmax, config.roundingPrecision ) + "," + strip( node.Name ) + "\n";
-   
-    // Add generator to elements array and set it's reactive power in baseElementsReactPow array
-    elements.push( [ element, node ] );
-    
-    baseElementsReactPow.push( element.Qg );
-  }
-   
-}
-
-// Write the buffer string to the file and close the file
-resultFiles[ 1 ].Write( buffer );
-resultFiles[ 1 ].close();
+// Fills transformer file ( resultFiles[ 2 ] ) with valid transformers and connected nodes
+// Add valid transformers to arrays with coresponding node and branch and
+// baseElementsReactPow with transformers reactive power
+fillTransformersArrays( elements, nodes, baseElementsReactPow, resultFiles[ 3 ], config );
 
 // Writes to file headers and elements name
-resultFiles[ 2 ].WriteLine( "name,min_tap,current_tap,max_tap, regulation_step, connected_node" ); 
-
-// Add valid transformers to arrays with coresponding node and branch. Constrains:
-// Transformer must be connected to node from nodes array, have more than 1 tap, not already in elements array
-for( i in nodes ){
-
-  node = nodes[ i ];
-
-  for( var j = 1; j < Data.N_Trf; j++ ){
-
-    transformer = TrfArray.Get( j );
-     
-    if( 
-        ( node.Name == transformer.EndName || node.Name == transformer.BegName ) && 
-
-        transformer.EndName.charAt( config.nodeCharIndex ) != config.nodeChar && 
-        
-        transformer.BegName.charAt( config.nodeCharIndex )!= config.nodeChar && 
-        
-        !isElementInArrayByName( elements, transformer.Name ) && transformer.Lstp > 1 && 
-        
-        transformer.Vn2 >= config.minRatedVoltage && transformer.Vn1 >= config.minRatedVoltage
-
-    ){
-
-      // If transformer is on it's last tap then minTap is set to 1 and maxTap is set to number of taps
-      // If not then minTap is set to number of taps and maxTap is set to 1
-      var minTap = maxTap = null;
-
-      if( transformer.TapLoc === 1 ){ minTap = 1, maxTap = transformer.Lstp; }
-
-      else{ minTap = transformer.Lstp, maxTap = 1 }
-      
-      // Writes to file transformer's name, current tap, min tap, max tap, tap regulation step and connected node
-      resultFiles[ 2 ].WriteLine( strip( transformer.name ) + "," + minTap + "," + transformer.Stp0 + "," + 
-      maxTap + "," + roundTo( transformer.dUstp, config.roundingPrecision ) + "," + node.Name );
-      
-      branch = BraArray.Get( transformer.NrBra );
-
-      elements.push( [ transformer, node, branch ] );
-      
-      if( node.Name === transformer.EndName ) baseElementsReactPow.push( branch.Qend );
-      
-      else baseElementsReactPow.push( branch.Qbeg );
-    }
-    
-  }
-
-}
-
-resultFiles[ 2 ].close();
-
-// Writes to file headers and elements name
-writeDataToFile( resultFiles[ 3 ], elements );
+writeDataToFile( resultFiles[ 4 ], elements );
 
 // Writes to file headers and nodes name
-writeDataToFile( resultFiles[ 4 ], nodes );
+writeDataToFile( resultFiles[ 5 ], nodes );
 
 // Trying to save file before any change on transformers and connected nodes
 if( SaveTempBIN( tmpFile ) < 1 ) errorThrower( "Unable to create temporary file" );
+
+// Initialize variables
+var element = node = elementBaseValue = difference = buffer = null;
 
 // For each element make some change depending on type of elemenet, then write results into result files
 for( i in elements ){ 
@@ -259,35 +137,231 @@ for( i in elements ){
     buffer += roundTo( react - baseElementsReactPow[ j ], config.roundingPrecision ) + ",";
   }
   
-  resultFiles[ 3 ].WriteLine( removeLastChar( buffer ) );
+  resultFiles[ 4 ].WriteLine( removeLastChar( buffer ) );
 
   // Write element's name, it's difference of connected node power / tap number to base
   buffer = strip( element.Name ) + "," + difference + ",";
 
   // Write for each node it's new voltage
   for( j in nodes ) buffer += roundTo( nodes[ j ].Vi - baseNodesVolt[ j ], config.roundingPrecision ) + ",";
-  resultFiles[ 4 ].WriteLine( removeLastChar( buffer ) );
+  resultFiles[ 5 ].WriteLine( removeLastChar( buffer ) );
 
   // Load model without any changes to transformators
   ReadTempBIN( tmpFile );
 }
 // Load the original model from temporary backup
-ReadTempBIN(tmpOgFile);
+ReadTempBIN( tmpOgFile );
 
 // Remove temporary binary files to clean up
-fso.DeleteFile(tmpFile);
-fso.DeleteFile(tmpOgFile);
+fso.DeleteFile( tmpFile );
+fso.DeleteFile( tmpOgFile );
 
 // Close the result files to release resources
-resultFiles[3].Close();
 resultFiles[4].Close();
-
+resultFiles[5].Close();
 
 // Calculate and display the program's working duration.
 // Note: The working duration calculation does not account for cases where the program 
 // starts and ends on different days due to the lack of date handling.
 var duration = getTime() - time;
-MsgBox("Task completed in " + formatTime(duration), 0 | 64, "Task completed");
+MsgBox( "Task completed in " + formatTime( duration ), 0 | 64, "Task completed" );
+
+
+// Saves all areas from the model to the specified file.
+// The output file format is a CSV file with the following columns:
+// Name, Area, Zone, Compound, Region
+function saveAreasToFile( file, config ) {
+
+  // Initialize a buffer string with headers
+  var buffer = "name,area,zone,compound,region\n";
+  var area = null;
+
+  // Loop through all areas in the project
+  for ( var i = 1; i < Data.N_Zon; i++ ){
+
+    area = ZonArray.Get( i );
+
+    // Check if the area matches the specified area or if the area index is 0
+    if( area.Area === config.areaId || config.areaId <= 0 ){
+
+      // Write the area name, area index, zone index, compound index, and region index to the buffer
+      buffer += strip( area.AreaName ) + "," + area.Area + "," + area.Zone + "," + area.Comp + "," + area.Regn + "\n";
+    }
+
+  }
+
+  // Write the buffer to the file and close it
+  file.Write( buffer );
+  file.close();
+}
+
+// Fills a node file with nodes from the specified area that meet certain criteria.
+// The function also populates arrays with nodes that were written to the file and their base voltage.
+function fillNodesArrays(nodesArray, baseNodesVoltageArray, inputArray, file, config) {
+
+  // Initialize a buffer string with headers
+  var buffer = "name,min_voltage,current_voltage,max_voltage,area,zone,compound,region\n";
+
+  var node;
+
+  // Loop through all nodes in the project
+  for (var i = 1; i < Data.N_Nod; i++) {
+
+    node = NodArray.Get(i);
+
+    // Skip nodes ending with 55 if skipFakeNodes is set in config
+    if (config.skipFakeNodes && isStringMatchingRegex(strip(node.Name), "55$")) continue;
+
+    // Add node to arrays if it fulfills all conditions
+    if (
+      (node.Area === config.areaId || config.areaId <= 0) && // Matches the specified area
+      node.St > 0 && // Node is connected
+      node.Name.charAt(config.nodeCharIndex) != config.nodeChar && // Not a generator's node
+      node.Vn >= config.minRatedVoltage && // Voltage setpoint is higher than minimum
+      isStringMatchingRegexArray(strip(node.Name), inputArray) // Name matches one from input
+    ) {
+
+      buffer += strip(node.Name) + "," + roundTo(node.Vmin, config.roundingPrecision) + "," +
+      roundTo(node.Vi, config.roundingPrecision) + "," + 
+      roundTo(node.Vmax, config.roundingPrecision) + "," +
+      node.Area + "," + node.Zone + "," + node.Comp + "," + node.Regn + "\n";
+
+      nodesArray.push(node); // Add node to nodesArray
+      baseNodesVoltageArray.push(node.Vi); // Add base voltage to baseNodesVoltageArray
+    }
+  }
+
+  // Write buffered node data to file and close it
+  file.Write(buffer);
+  file.close();
+}
+
+// Fills the generator file with valid generators and their connected nodes.
+// Also populates arrays with generators' reactive power and connected nodes' power.
+function fillGeneratorsArrays(elementsArray, baseElementsReactPowerArray, inputArray, file, config) {
+
+  // Write headers to the file
+  var buffer = "name,min_active_power,current_active_power,max_active_power,min_reactive_power,current_reactive_power,max_reactive_power,connected_node\n";
+
+  var element, node, branch;
+
+  // Loop through all generators in the project
+  for (var i = 1; i < Data.N_Gen; i++) {
+
+    // Get generator and node that it's connected to
+    element = GenArray.Get(i), node = NodArray.Get(element.NrNod);
+
+    // Skip generators connected to type 1 nodes if specified in config
+    if (config.skipGeneratorsConnectedToNodesTypeOne && node.Typ === 1) continue;
+
+    // If generator is connected to a transformer, get the transformer and its connected node
+    if (element.TrfName) {
+    
+      branch = BraArray.Find(element.TrfName);
+      node = (node.Name === branch.EndName) ? NodArray.Find(branch.BegName) : NodArray.Find(branch.EndName);
+    } 
+    
+    // Skip generators without transformers if specified in config
+    else if (config.skipGeneratorsWithoutTransformers) continue;
+
+    // Add valid generators to arrays based on constraints
+    if (
+      element.Qmin < element.Qmax && // Reactive power constraints
+      element.St > 0 && // Generator is connected 
+      ( node.Area === config.areaId || config.areaId <= 0 ) && // Area constraint
+      isStringMatchingRegexArray( strip( node.Name ), inputArray ) // Name matching
+    ) {
+     
+      // Write generator information to file
+      buffer += strip( element.Name ) + "," + 
+      roundTo( element.Pmin, config.roundingPrecision ) + "," + 
+      roundTo( element.Pg, config.roundingPrecision ) + "," + 
+      roundTo( element.Pmax, config.roundingPrecision ) + "," + 
+      roundTo( element.Qmin, config.roundingPrecision ) + "," + 
+      roundTo( element.Qg, config.roundingPrecision ) + "," + 
+      roundTo( element.Qmax, config.roundingPrecision ) + "," + 
+      strip( node.Name ) + "\n";
+   
+      // Add generator to elements array and set its reactive power in baseElementsReactPowerArray
+      elementsArray.push( [ element, node ] );
+      baseElementsReactPowerArray.push( element.Qg );  
+    }
+  }
+
+  // Write the buffer string to the file
+  file.Write(buffer);
+  file.close();
+}
+
+// Adds valid transformers to arrays with coresponding node and branch.
+// The constraints are:
+// Transformer must be connected to node from nodes array,
+// have more than 1 tap, not already in elements array
+function fillTransformersArrays( elements, nodes, baseElementsReactPowerArray, file, config ) {
+
+  // Write headers to the file
+  file.WriteLine( "name,min_tap,current_tap,max_tap, regulation_step, connected_node" );
+
+  var node, transformer, branch;
+
+  // Loop through all nodes in the nodes array
+  for( i in nodes ){
+
+    node = nodes[ i ];
+
+    // Loop through all transformers in the project
+    for( var j = 1; j < Data.N_Trf; j++ ){
+
+      transformer = TrfArray.Get( j );
+     
+      if( 
+        // Check if the transformer is connected to the node from nodes array
+        ( node.Name == transformer.EndName || node.Name == transformer.BegName ) && 
+
+        // Check if the transformer's node name contains the specified character
+        transformer.EndName.charAt( config.nodeCharIndex ) != config.nodeChar && 
+        
+        // Check if the transformer's node name contains the specified character
+        transformer.BegName.charAt( config.nodeCharIndex )!= config.nodeChar && 
+        
+        // Check if the transformer is not already in the elements array
+        !isElementInArrayByName( elements, transformer.Name ) && transformer.Lstp > 1 && 
+        
+        // Check if the transformer's rated voltages are higher than the specified minimum
+        transformer.Vn2 >= config.minRatedVoltage && transformer.Vn1 >= config.minRatedVoltage
+      ){
+
+        // If transformer is on it's last tap then minTap is set to 1 and maxTap is set to number of taps
+        // If not then minTap is set to number of taps and maxTap is set to 1
+        var minTap = maxTap = null;
+
+        // Set minTap and maxTap based on the transformer's tap position
+        if( transformer.TapLoc === 1 ){ minTap = 1, maxTap = transformer.Lstp; }
+
+        else{ minTap = transformer.Lstp, maxTap = 1 }
+
+        // Write to file transformer's name, current tap, min tap, max tap, tap regulation step and connected node
+        file.WriteLine( strip( transformer.name ) + "," + minTap + "," + transformer.Stp0 + "," + 
+        maxTap + "," + roundTo( transformer.dUstp, config.roundingPrecision ) + "," + node.Name );
+        
+        // Get the branch connected to the transformer
+        branch = BraArray.Get( transformer.NrBra );
+
+        // Add the transformer to the elements array and set its reactive power in the baseElementsReactPowerArray
+        elements.push( [ transformer, node, branch ] );
+        
+        // Set the reactive power based on the connected node
+        if( node.Name === transformer.EndName ) baseElementsReactPowerArray.push( branch.Qend );
+        
+        else baseElementsReactPowerArray.push( branch.Qbeg );
+      }
+
+    }
+
+  }
+
+  file.close();
+}
 
 // Rounds a value to the specified number of decimal places.
 // Uses the JavaScript Math.round() function.
@@ -430,7 +504,6 @@ function writeDataToFile( file, objectArray ){
   // Write buffer string without the last character ( which is a comma ) to the file
   file.WriteLine( buffer.slice( 0, -1 ) );
 }
-
 
 // Creates a folder in the specified location based on the configuration object.
 // Throws an error if the configuration object is null or if the folder cannot be created.

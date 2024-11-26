@@ -21,8 +21,9 @@ The input file (input.txt) contains a list of node names to search for, separate
 
 
 Output Files
-The script generates five output files:
+The script generates six output files:
 
+  * Areas file
   * Nodes file
   * Generators file
   * Transformers file
