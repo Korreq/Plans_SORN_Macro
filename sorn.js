@@ -6,16 +6,14 @@ var configurationFileLocation = "Z:\\home\\yoga\\Documents\\Github\\Plans_SORN_M
   This script retrieves node names from an input file, searches for connected transformers and generators, 
   and writes original values to output files. It then updates generator voltages and transformer taps, 
   recalculates values, and writes the results to output files.
-*/
 
-/* 
+
   Input File Format:
   Node names are searched using a case-insensitive regex pattern. 
   Multiple node names can be specified, separated by commas.
   Example: "ABC, bac"
-*/
 
-/* 
+
   Configuration File Options:
   The following options can be used to filter node search results:
     - areaId: Only nodes from the specified area are considered
@@ -201,8 +199,7 @@ function fillNodesArrays(nodesArray, baseNodesVoltageArray, inputArray, file, co
 
   // Initialize a buffer string with headers
   var buffer = "name,min_voltage,current_voltage,max_voltage,area,zone,compound,region\n";
-
-  var node;
+  var node = null;
 
   // Loop through all nodes in the project
   for (var i = 1; i < Data.N_Nod; i++) {
@@ -242,7 +239,6 @@ function fillGeneratorsArrays(elementsArray, baseElementsReactPowerArray, inputA
 
   // Write headers to the file
   var buffer = "name,min_active_power,current_active_power,max_active_power,min_reactive_power,current_reactive_power,max_reactive_power,connected_node\n";
-
   var element, node, branch;
 
   // Loop through all generators in the project
@@ -301,7 +297,6 @@ function fillTransformersArrays( elements, nodes, baseElementsReactPowerArray, f
 
   // Write headers to the file
   file.WriteLine( "name,min_tap,current_tap,max_tap, regulation_step, connected_node" );
-
   var node, transformer, branch;
 
   // Loop through all nodes in the nodes array
@@ -316,17 +311,13 @@ function fillTransformersArrays( elements, nodes, baseElementsReactPowerArray, f
      
       if( 
         // Check if the transformer is connected to the node from nodes array
-        ( node.Name == transformer.EndName || node.Name == transformer.BegName ) && 
-
+        ( node.Name == transformer.EndName || node.Name == transformer.BegName ) &&
         // Check if the transformer's node name contains the specified character
         transformer.EndName.charAt( config.nodeCharIndex ) != config.nodeChar && 
-        
         // Check if the transformer's node name contains the specified character
         transformer.BegName.charAt( config.nodeCharIndex )!= config.nodeChar && 
-        
         // Check if the transformer is not already in the elements array
         !isElementInArrayByName( elements, transformer.Name ) && transformer.Lstp > 1 && 
-        
         // Check if the transformer's rated voltages are higher than the specified minimum
         transformer.Vn2 >= config.minRatedVoltage && transformer.Vn1 >= config.minRatedVoltage
       ){
@@ -683,7 +674,7 @@ function getInputArray( file ){
       word = tmp[ i ].replace(/(^\s+|\s+$)/g, '');
 
       // If word isn't empty push it to array
-      if( word ) array.push( word.toUpperCase() );
+      if( word ) array.push( word );
     }
 
   }
