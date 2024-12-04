@@ -124,7 +124,7 @@ for( i in elements ){
   }
   
   // Write element's name, it's difference of connected node power / tap number to base
-  buffer = strip( element.Name ) + "," + difference + ",";
+  buffer = strip( element.Name ) + ";" + difference + ";";
 
   // Write for each element it's new reactive power
   for( j in elements ){
@@ -132,16 +132,16 @@ for( i in elements ){
     // Check if element have a branch, if true use reactive power from matching branch end
     react = elements[ j ][ 2 ] ? ( elements[ j ][ 0 ].begName === elements[ j ][ 1 ].Name ? elements[ j ][ 2 ].Qbeg : elements[ j ][ 2 ].Qend ) : elements[ j ][ 0 ].Qg;
   
-    buffer += roundTo( react - baseElementsReactPow[ j ], config.roundingPrecision ) + ",";
+    buffer += roundTo( react - baseElementsReactPow[ j ], config.roundingPrecision ) + ";";
   }
   
   resultFiles[ 4 ].WriteLine( removeLastChar( buffer ) );
 
   // Write element's name, it's difference of connected node power / tap number to base
-  buffer = strip( element.Name ) + "," + difference + ",";
+  buffer = strip( element.Name ) + ";" + difference + ";";
 
   // Write for each node it's new voltage
-  for( j in nodes ) buffer += roundTo( nodes[ j ].Vi - baseNodesVolt[ j ], config.roundingPrecision ) + ",";
+  for( j in nodes ) buffer += roundTo( nodes[ j ].Vi - baseNodesVolt[ j ], config.roundingPrecision ) + ";";
   resultFiles[ 5 ].WriteLine( removeLastChar( buffer ) );
 
   // Load model without any changes to transformators
@@ -171,7 +171,7 @@ MsgBox( "Task completed in " + formatTime( duration ), 0 | 64, "Task completed" 
 function saveAreasToFile( file, config ) {
 
   // Initialize a buffer string with headers
-  var buffer = "name,area,zone,compound,region\n";
+  var buffer = "name;area;zone;compound;region\n";
   var area = null;
 
   // Loop through all areas in the project
@@ -183,7 +183,7 @@ function saveAreasToFile( file, config ) {
     if( area.Area === config.areaId || config.areaId <= 0 ){
 
       // Write the area name, area index, zone index, compound index, and region index to the buffer
-      buffer += strip( area.AreaName ) + "," + area.Area + "," + area.Zone + "," + area.Comp + "," + area.Regn + "\n";
+      buffer += strip( area.AreaName ) + ";" + area.Area + ";" + area.Zone + ";" + area.Comp + ";" + area.Regn + "\n";
     }
 
   }
@@ -195,10 +195,10 @@ function saveAreasToFile( file, config ) {
 
 // Fills a node file with nodes from the specified area that meet certain criteria.
 // The function also populates arrays with nodes that were written to the file and their base voltage.
-function fillNodesArrays(nodesArray, baseNodesVoltageArray, inputArray, file, config) {
+function fillNodesArrays( nodesArray, baseNodesVoltageArray, inputArray, file, config ) {
 
   // Initialize a buffer string with headers
-  var buffer = "name,min_voltage,current_voltage,max_voltage,area,zone,compound,region\n";
+  var buffer = "name;min_voltage;current_voltage;max_voltage;area;zone;compound;region\n";
   var node = null;
 
   // Loop through all nodes in the project
@@ -218,10 +218,10 @@ function fillNodesArrays(nodesArray, baseNodesVoltageArray, inputArray, file, co
       isStringMatchingRegexArray(strip(node.Name), inputArray) // Name matches one from input
     ) {
 
-      buffer += strip(node.Name) + "," + roundTo(node.Vmin, config.roundingPrecision) + "," +
-      roundTo(node.Vi, config.roundingPrecision) + "," + 
-      roundTo(node.Vmax, config.roundingPrecision) + "," +
-      node.Area + "," + node.Zone + "," + node.Comp + "," + node.Regn + "\n";
+      buffer += strip(node.Name) + ";" + roundTo(node.Vmin, config.roundingPrecision) + ";" +
+      roundTo(node.Vi, config.roundingPrecision) + ";" + 
+      roundTo(node.Vmax, config.roundingPrecision) + ";" +
+      node.Area + ";" + node.Zone + ";" + node.Comp + ";" + node.Regn + "\n";
 
       nodesArray.push(node); // Add node to nodesArray
       baseNodesVoltageArray.push(node.Vi); // Add base voltage to baseNodesVoltageArray
@@ -235,10 +235,10 @@ function fillNodesArrays(nodesArray, baseNodesVoltageArray, inputArray, file, co
 
 // Fills the generator file with valid generators and their connected nodes.
 // Also populates arrays with generators' reactive power and connected nodes' power.
-function fillGeneratorsArrays(elementsArray, baseElementsReactPowerArray, inputArray, file, config) {
+function fillGeneratorsArrays( elementsArray, baseElementsReactPowerArray, inputArray, file, config ) {
 
   // Write headers to the file
-  var buffer = "name,min_active_power,current_active_power,max_active_power,min_reactive_power,current_reactive_power,max_reactive_power,connected_node\n";
+  var buffer = "name;min_active_power;current_active_power;max_active_power;min_reactive_power;current_reactive_power;max_reactive_power;connected_node\n";
   var element, node, branch;
 
   // Loop through all generators in the project
@@ -269,13 +269,13 @@ function fillGeneratorsArrays(elementsArray, baseElementsReactPowerArray, inputA
     ) {
      
       // Write generator information to file
-      buffer += strip( element.Name ) + "," + 
-      roundTo( element.Pmin, config.roundingPrecision ) + "," + 
-      roundTo( element.Pg, config.roundingPrecision ) + "," + 
-      roundTo( element.Pmax, config.roundingPrecision ) + "," + 
-      roundTo( element.Qmin, config.roundingPrecision ) + "," + 
-      roundTo( element.Qg, config.roundingPrecision ) + "," + 
-      roundTo( element.Qmax, config.roundingPrecision ) + "," + 
+      buffer += strip( element.Name ) + ";" + 
+      roundTo( element.Pmin, config.roundingPrecision ) + ";" + 
+      roundTo( element.Pg, config.roundingPrecision ) + ";" + 
+      roundTo( element.Pmax, config.roundingPrecision ) + ";" + 
+      roundTo( element.Qmin, config.roundingPrecision ) + ";" + 
+      roundTo( element.Qg, config.roundingPrecision ) + ";" + 
+      roundTo( element.Qmax, config.roundingPrecision ) + ";" + 
       strip( node.Name ) + "\n";
    
       // Add generator to elements array and set its reactive power in baseElementsReactPowerArray
@@ -296,7 +296,7 @@ function fillGeneratorsArrays(elementsArray, baseElementsReactPowerArray, inputA
 function fillTransformersArrays( elements, nodes, baseElementsReactPowerArray, file, config ) {
 
   // Write headers to the file
-  file.WriteLine( "name,min_tap,current_tap,max_tap, regulation_step, connected_node" );
+  file.WriteLine( "name;min_tap;current_tap;max_tap;regulation_step;begining_node;ending_node" );
   var node, transformer, branch;
 
   // Loop through all nodes in the nodes array
@@ -332,8 +332,9 @@ function fillTransformersArrays( elements, nodes, baseElementsReactPowerArray, f
         else{ minTap = transformer.Lstp, maxTap = 1 }
 
         // Write to file transformer's name, current tap, min tap, max tap, tap regulation step and connected node
-        file.WriteLine( strip( transformer.name ) + "," + minTap + "," + transformer.Stp0 + "," + 
-        maxTap + "," + roundTo( transformer.dUstp, config.roundingPrecision ) + "," + node.Name );
+        file.WriteLine( strip( transformer.name ) + ";" + minTap + ";" + transformer.Stp0 + ";" + 
+        maxTap + ";" + roundTo( transformer.dUstp, config.roundingPrecision ) + ";" + 
+        strip( transformer.BegName ) + ";" + strip( transformer.EndName ) );
         
         // Get the branch connected to the transformer
         branch = BraArray.Get( transformer.NrBra );
@@ -356,7 +357,7 @@ function fillTransformersArrays( elements, nodes, baseElementsReactPowerArray, f
 
 // Rounds a value to the specified number of decimal places.
 // Uses the JavaScript Math.round() function.
-function roundTo( value, precision ){
+function roundTo( value, precision ) {
 
   // Calculate the multiplier based on the precision
   var multiplier = Math.pow(10, precision);
@@ -366,7 +367,7 @@ function roundTo( value, precision ){
 }
 
 // Sets power flow calculation settings using the specified configuration object.
-function setPowerFlowSettings( config ){
+function setPowerFlowSettings( config ) {
 
   // Set the maximum number of iterations for the power flow calculation
   Calc.Itmax = config.maxIterations;
@@ -385,7 +386,7 @@ function setPowerFlowSettings( config ){
 }
 
 // Attempts to load the original file before throwing an error.
-function safeErrorThrower(message, binPath) {
+function safeErrorThrower( message, binPath ) {
   
   // Attempt to read the temporary binary file
   try { ReadTempBIN(binPath); } 
@@ -400,7 +401,7 @@ function safeErrorThrower(message, binPath) {
 // Basic error thrower with error message window
 // Shows error message in a message box and then throws the error
 // Takes only one argument - error message
-function errorThrower( message ){
+function errorThrower( message ) {
   
   MsgBox( message, 16, "Error" );
 
@@ -415,7 +416,7 @@ function CPF() {
 }
 
 // Calls built-in power flow calculation function, throws error if it fails, then tries to load original model
-function sCPF( backupFile ){
+function sCPF( backupFile ) {
 
   // Call built-in power flow calculation function
   if( CalcLF() !== 1 ) {
@@ -426,7 +427,7 @@ function sCPF( backupFile ){
 }
 
 // Function takes string and returns it without whitespaces
-function strip( string ){
+function strip( string ) {
 
   // Remove leading and trailing whitespaces
   return string.replace(/(^\s+|\s+$)/g, '');
@@ -435,7 +436,7 @@ function strip( string ){
 // Function checks if string matches regex and returns true/false
 // Takes two arguments: string - string to check, regex - regex to check against
 // Returns true if string matches regex, false if not
-function isStringMatchingRegex( string, regex ){
+function isStringMatchingRegex( string, regex ) {
 
   // Regex flags for Multiline and Insensitive
   var regexExpression = new RegExp( regex , "mi" );  
@@ -449,7 +450,7 @@ function isStringMatchingRegex( string, regex ){
 // Function checks if string matches any of regexes in an array and returns true/false
 // Takes two arguments: string - string to check, regexArray - array of regexes to check against
 // Returns true if string matches any of regexes, false if not
-function isStringMatchingRegexArray( string, regexArray ){
+function isStringMatchingRegexArray( string, regexArray ) {
 
   // Loop through each regex in the array and check if string matches it
   for( var i in regexArray ) if( isStringMatchingRegex( string, "^" + regexArray[ i ] ) ) return true;
@@ -461,7 +462,7 @@ function isStringMatchingRegexArray( string, regexArray ){
 
 // Function takes a 2D array and an element name.
 // It iterates through the array and checks if the name of any element matches the given element name.
-function isElementInArrayByName( array, elementName ){
+function isElementInArrayByName( array, elementName ) {
 
   // Loop through each element in the array and check if it matches the given elementName
   for( i in array ) if(array[ i ][ 0 ].Name === elementName) return true;
@@ -471,24 +472,24 @@ function isElementInArrayByName( array, elementName ){
 }
 
 // Function removes the last character from a string
-function removeLastChar( string ){
+function removeLastChar( string ) {
 
   return string.slice( 0, -1 );
 }
 
 // Takes two arguments: file - file object, objectArray - array of objects
 // Writes to file headers, objects names and corresponding data
-function writeDataToFile( file, objectArray ){
+function writeDataToFile( file, objectArray ) {
 
   // Create buffer string with column names
-  var buffer = "Elements,U_G/Tap Difference,"
+  var buffer = "Elements;U_G/Tap Difference;"
 
   // Loop through each object in the array and add it's name to the buffer string
   for( i in objectArray ){
   
-    if( objectArray[ i ][ 0 ] ) buffer += strip( objectArray[ i ][ 0 ].Name ) + ",";
+    if( objectArray[ i ][ 0 ] ) buffer += strip( objectArray[ i ][ 0 ].Name ) + ";";
 
-    else buffer += strip( objectArray[ i ].Name ) + ",";
+    else buffer += strip( objectArray[ i ].Name ) + ";";
   
   }
 
@@ -498,13 +499,16 @@ function writeDataToFile( file, objectArray ){
 
 // Creates a folder in the specified location based on the configuration object.
 // Throws an error if the configuration object is null or if the folder cannot be created.
-function createFolder(config, fso) {
+function createFolder( config, fso ) {
 
   // Check if the configuration object is null
   if (!config) errorThrower("Unable to load configuration");
 
+  // Add timestamp to directory name if specified in configuration file
+  var timeStamp = ( config.addTimestampToResultsDirectory == 1 ) ? getCurrentDate() + "--" : "";
+
   // Get folder name and path from the configuration
-  var folder = config.folderName;
+  var folder = timeStamp + config.folderName;
   var folderPath = config.homeFolder + "\\" + folder;
 
   // Check if the folder does not exist, then create it
@@ -522,7 +526,7 @@ function createFolder(config, fso) {
 // Function takes config object and depending on it's config creates file in specified location.
 // Also can create folder where results are located depending on configuration file 
 // Throws error if config object is null and when file can't be created
-function createFile( name, config, fso ){
+function createFile( name, config, fso ) {
  
   if( !config ) errorThrower( "Unable to load configuration" );
 
@@ -531,11 +535,8 @@ function createFile( name, config, fso ){
   // Create folder if specified in configuration file
   var folder = ( config.createResultsFolder == 1 ) ? createFolder( config, fso ) : "";
   
-  // Add timestamp to file name if specified in configuration file
-  var timeStamp = ( config.addTimestampToResultsFiles == 1 ) ? getCurrentDate() + "--" : "";
-  
   // Create file location path
-  var fileLocation = config.homeFolder + "\\" + folder + timeStamp + name + ".csv";
+  var fileLocation = config.homeFolder + "\\" + folder + name + ".csv";
   try{ file = fso.CreateTextFile( fileLocation ); }
   
   catch( e ){ errorThrower( "File already exists or unable to create it" ); }
@@ -545,7 +546,7 @@ function createFile( name, config, fso ){
 
 // Reads a file from the specified location based on the configuration object.
 // Throws an error if the configuration object is null or if the file can't be read.
-function readFile( config, fso ){
+function readFile( config, fso ) {
 
   // Check if the configuration object is null
   if( !config ) errorThrower( "Unable to load configuration" );
@@ -570,7 +571,7 @@ function readFile( config, fso ){
 
 // Function uses built in .ini function to get it's settings from config file.
 // Returns conf object with settings taken from file. If file isn't found error is throwed instead.
-function iniConfigConstructor( iniPath, fso ){
+function iniConfigConstructor( iniPath, fso ) {
   
   var configFile = iniPath + "\\config.ini";
 
@@ -603,11 +604,11 @@ function iniConfigConstructor( iniPath, fso ){
     // Folder
     createResultsFolder: ini.GetBool( "folder", "createResultsFolder", 0 ),
     folderName: ini.GetString( "folder", "folderName", "folder" ),
-    
+    addTimestampToResultsDirectory: ini.GetBool( "files", "addTimestampToResultsDirectory", 1 ),
+
     // Files
     inputFileLocation: ini.GetString( "files", "inputFileLocation", hFolder ),
     inputFileName: ini.GetString( "files", "inputFileName", "input" ),
-    addTimestampToResultsFiles: ini.GetBool( "files", "addTimestampToResultsFiles", 1 ),
     roundingPrecision: ini.GetInt( "files", "roundingPrecision", 2 ),
     
     // Power Flow
@@ -638,11 +639,11 @@ function iniConfigConstructor( iniPath, fso ){
   // Folder
   ini.WriteBool( "folder", "createResultsFolder", config.createResultsFolder );
   ini.WriteString( "folder", "folderName", config.folderName );
+  ini.WriteBool( "files", "addTimestampToResultsDirectory", config.addTimestampToResultsDirectory );
     
   // Files
   ini.WriteString( "files", "inputFileLocation", config.inputFileLocation );
   ini.WriteString( "files", "inputFileName", config.inputFileName );
-  ini.WriteBool( "files", "addTimestampToResultsFiles", config.addTimestampToResultsFiles );
   ini.WriteInt( "files", "roundingPrecision", config.roundingPrecision );
     
   // Power Flow
@@ -657,7 +658,7 @@ function iniConfigConstructor( iniPath, fso ){
 
 // Function gets file and takes each line into a array and after finding "," character pushes array into other array. 
 // Returns string array
-function getInputArray( file ){
+function getInputArray( file ) {
 
   // Initialize temporary array and word variable
   var array = [], tmp = [], word;
@@ -683,7 +684,7 @@ function getInputArray( file ){
 }
 
 // Function takes current date and returns it in file safe format  
-function getCurrentDate(){
+function getCurrentDate() {
   
   var current = new Date();
   
@@ -694,7 +695,7 @@ function getCurrentDate(){
 }
 
 // Function returns current time in seconds 
-function getTime(){
+function getTime() {
   
   var current = new Date();
   
@@ -702,7 +703,7 @@ function getTime(){
 }
 
 // Function takes time in seconds and returns time in HH:MM:SS format
-function formatTime( time ){
+function formatTime( time ) {
 
   var hours = minutes = 0;
 
