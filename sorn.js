@@ -25,6 +25,18 @@ var configurationFileLocation = "Z:\\home\\yoga\\Documents\\Github\\Plans_SORN_M
     - skipGeneratorsWithoutTransformers: Exclude generators without directly connected transformers
 */
 
+/*
+
+  TODO: 
+  
+  Add date to info file, 
+  add elemnt type to v and q files, 
+  build switch to load all models file type
+
+*/
+
+
+
 // Create a file system object for file operations
 var fso = new ActiveXObject( "Scripting.FileSystemObject" );
 
@@ -56,9 +68,12 @@ inputFile.close();
 // Create result files and folder using settings from a config file
 //var resultFiles = [ createFile( "nodes", config, fso ), createFile( "generators", config, fso ), 
 //createFile( "transformers", config, fso ), createFile( "q", config, fso ), createFile( "v", config, fso ) ];
-var resultFiles = [ createFile( "areas", config, fso ), createFile( "nodes", config, fso ), createFile( "generators", config, fso ), 
-  createFile( "transformers", config, fso ), createFile( "q", config, fso ), createFile( "v", config, fso ) ];
+var resultFiles = [ createFile( "areas", "csv", config, fso ), createFile( "nodes", "csv", config, fso ), createFile( "generators", "csv", config, fso ), 
+  createFile( "transformers", "csv", config, fso ), createFile( "q", "csv", config, fso ), createFile( "v", "csv", config, fso ) ];
   
+// Save model info to file
+saveModelInfoToFile( createFile( "info", "txt", config, fso ), config );
+
 // Saves areas with coresponding data to file
 saveAreasToFile( resultFiles[ 0 ], config );
 
@@ -165,6 +180,54 @@ var duration = getTime() - time;
 MsgBox( "Task completed in " + formatTime( duration ), 0 | 64, "Task completed" );
 
 
+//  Saves information about the model, including power flow calculation settings
+//  to the specified file.
+function saveModelInfoToFile( file, config ) {
+
+  var format = method = "Unknown";
+
+  // Determine the name of the power flow calculation method based on the
+  // value of config.method
+  switch( config.method ){
+
+    case 1: method = "Stott"; break;
+    case 2: method = "Newton"; break;
+    case 3: method = "Ward"; break;
+    case 4: method = "Gauss"; break;
+    case 5: method = "DC"; break;
+  }
+
+  switch( Data.Format ){
+
+    case 10: format = "KDM"; break;
+    case 20: format = "UZP"; break;
+    case 30: format = "IEN"; break;
+    case 40: format = "BIN"; break;
+    case 60: format = "EPC"; break;
+    case 70: format = "PTI"; break;
+    case 80: format = "UCTE"; break;
+  }
+
+  // Write the model information to the file
+  file.Write(
+
+    // Model information
+    "Model: " + Data.FileName + "\n" +
+    "Format: " + format + "\n" +
+
+    // Power flow calculation settings
+    "Power flow settings:\n" +
+    "Method: " + method + "\n" +
+    "Max iterations: " + config.maxIterations + "\n" +
+    "Starting precision: " + config.startingPrecision + "\n" +
+    "Precision: " + config.precision + "\n" +
+    "Uzg iteration precision: " + config.uzgIterationPrecision
+  );
+
+  // Close the file
+  file.close();
+}
+
 // Saves all areas from the model to the specified file.
 // The output file format is a CSV file with the following columns:
 // Name, Area, Zone, Compound, Region
@@ -198,7 +261,7 @@ function saveAreasToFile( file, config ) {
 function fillNodesArrays( nodesArray, baseNodesVoltageArray, inputArray, file, config ) {
 
   // Initialize a buffer string with headers
-  var buffer = "name;min_voltage;current_voltage;max_voltage;area;zone;compound;region\n";
+  var buffer = "name;type;min_voltage;current_voltage;max_voltage;area;zone;compound;region\n";
   var node = null;
 
   // Loop through all nodes in the project
@@ -218,7 +281,8 @@ function fillNodesArrays( nodesArray, baseNodesVoltageArray, inputArray, file, c
       isStringMatchingRegexArray(strip(node.Name), inputArray) // Name matches one from input
     ) {
 
-      buffer += strip(node.Name) + ";" + roundTo(node.Vmin, config.roundingPrecision) + ";" +
+      buffer += strip(node.Name) + ";" + node.Typ + ";"+ 
+      roundTo(node.Vmin, config.roundingPrecision) + ";" +
       roundTo(node.Vi, config.roundingPrecision) + ";" + 
       roundTo(node.Vmax, config.roundingPrecision) + ";" +
       node.Area + ";" + node.Zone + ";" + node.Comp + ";" + node.Regn + "\n";
@@ -238,7 +302,7 @@ function fillNodesArrays( nodesArray, baseNodesVoltageArray, inputArray, file, c
 function fillGeneratorsArrays( elementsArray, baseElementsReactPowerArray, inputArray, file, config ) {
 
   // Write headers to the file
-  var buffer = "name;min_active_power;current_active_power;max_active_power;min_reactive_power;current_reactive_power;max_reactive_power;connected_node\n";
+  var buffer = "name;min_active_power;current_active_power;max_active_power;min_reactive_power;current_reactive_power;max_reactive_power;connected_node;zone\n";
   var element, node, branch;
 
   // Loop through all generators in the project
@@ -276,7 +340,8 @@ function fillGeneratorsArrays( elementsArray, baseElementsReactPowerArray, input
       roundTo( element.Qmin, config.roundingPrecision ) + ";" + 
       roundTo( element.Qg, config.roundingPrecision ) + ";" + 
       roundTo( element.Qmax, config.roundingPrecision ) + ";" + 
-      strip( node.Name ) + "\n";
+      strip( node.Name ) + ";" +
+      node.Zone + "\n";
    
       // Add generator to elements array and set its reactive power in baseElementsReactPowerArray
       elementsArray.push( [ element, node ] );
@@ -296,7 +361,7 @@ function fillGeneratorsArrays( elementsArray, baseElementsReactPowerArray, input
 function fillTransformersArrays( elements, nodes, baseElementsReactPowerArray, file, config ) {
 
   // Write headers to the file
-  file.WriteLine( "name;min_tap;current_tap;max_tap;regulation_step;begining_node;ending_node" );
+  file.WriteLine( "name;min_tap;current_tap;max_tap;regulation_step;begining_node;ending_node;zone" );
   var node, transformer, branch;
 
   // Loop through all nodes in the nodes array
@@ -334,7 +399,7 @@ function fillTransformersArrays( elements, nodes, baseElementsReactPowerArray, f
         // Write to file transformer's name, current tap, min tap, max tap, tap regulation step and connected node
         file.WriteLine( strip( transformer.name ) + ";" + minTap + ";" + transformer.Stp0 + ";" + 
         maxTap + ";" + roundTo( transformer.dUstp, config.roundingPrecision ) + ";" + 
-        strip( transformer.BegName ) + ";" + strip( transformer.EndName ) );
+        strip( transformer.BegName ) + ";" + strip( transformer.EndName ) + ";" + node.Zone );
         
         // Get the branch connected to the transformer
         branch = BraArray.Get( transformer.NrBra );
@@ -526,7 +591,7 @@ function createFolder( config, fso ) {
 // Function takes config object and depending on it's config creates file in specified location.
 // Also can create folder where results are located depending on configuration file 
 // Throws error if config object is null and when file can't be created
-function createFile( name, config, fso ) {
+function createFile( name, format, config, fso ) {
  
   if( !config ) errorThrower( "Unable to load configuration" );
 
@@ -536,7 +601,7 @@ function createFile( name, config, fso ) {
   var folder = ( config.createResultsFolder == 1 ) ? createFolder( config, fso ) : "";
   
   // Create file location path
-  var fileLocation = config.homeFolder + "\\" + folder + name + ".csv";
+  var fileLocation = config.homeFolder + "\\" + folder + name + "." +format;
   try{ file = fso.CreateTextFile( fileLocation ); }
   
   catch( e ){ errorThrower( "File already exists or unable to create it" ); }
@@ -686,15 +751,15 @@ function getInputArray( file ) {
 // Function takes current date and returns it in file safe format  
 function getCurrentDate() {
   
-  var current = new Date();
+  var current = new Date()
   
-  var formatedDateArray = [ ( '0' + ( current.getMonth() + 1 ) ).slice( -2 ), ( '0' + current.getDate() ).slice( -2 ), 
-  ( '0' + current.getHours() ).slice( -2 ), ( '0' + current.getMinutes() ).slice( -2 ), ( '0' + current.getSeconds() ).slice( -2 ) ];
+  var formatedDateArray = [ ( '0' + ( current.getUTCMonth() + 1 ) ).slice( -2 ), ( '0' + current.getUTCDate() ).slice( -2 ), 
+  ( '0' + current.getUTCHours() ).slice( -2 ), ( '0' + current.getUTCMinutes() ).slice( -2 ), ( '0' + current.getUTCSeconds() ).slice( -2 ) ];
   
-  return current.getFullYear() + "-" + formatedDateArray[ 0 ] + "-" + formatedDateArray[ 1 ] + "--" + formatedDateArray[ 2 ] + "-" + formatedDateArray[ 3 ] + "-" + formatedDateArray[ 4 ];
+  return current.getUTCFullYear() + "-" + formatedDateArray[ 0 ] + "-" + formatedDateArray[ 1 ] + "--" + formatedDateArray[ 2 ] + "-" + formatedDateArray[ 3 ] + "-" + formatedDateArray[ 4 ];
 }
 
-// Function returns current time in seconds 
+// Function returns current time UTC in seconds 
 function getTime() {
   
   var current = new Date();
