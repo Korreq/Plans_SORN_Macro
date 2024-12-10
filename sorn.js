@@ -25,18 +25,6 @@ var configurationFileLocation = "Z:\\home\\yoga\\Documents\\Github\\Plans_SORN_M
     - skipGeneratorsWithoutTransformers: Exclude generators without directly connected transformers
 */
 
-/*
-
-  TODO: 
-  
-  Add date to info file, 
-  add elemnt type to v and q files, 
-  build switch to load all models file type
-
-*/
-
-
-
 // Create a file system object for file operations
 var fso = new ActiveXObject( "Scripting.FileSystemObject" );
 
@@ -45,7 +33,8 @@ var config = iniConfigConstructor( configurationFileLocation, fso );
 var tmpFile = config.homeFolder + "\\tmp.bin", tmpOgFile = config.homeFolder + "\\tmpOrg.bin";
 
 // Load the KDM model file and save it as a temporary binary file
-ReadDataKDM( config.modelPath + "\\" + config.modelName );
+//ReadDataKDM( config.modelPath + "\\" + config.modelName );
+loadModel( config.modelPath, config.modelName );
 if( SaveTempBIN( tmpOgFile ) < 1 ) errorThrower( "Unable to create temporary file" );
 
 // Record the macro's start time
@@ -102,7 +91,7 @@ writeDataToFile( resultFiles[ 5 ], nodes );
 if( SaveTempBIN( tmpFile ) < 1 ) errorThrower( "Unable to create temporary file" );
 
 // Initialize variables
-var element = node = elementBaseValue = difference = buffer = null;
+var element = node = elementBaseValue = difference = buffer = elementType = null;
 
 // For each element make some change depending on type of elemenet, then write results into result files
 for( i in elements ){ 
@@ -112,6 +101,17 @@ for( i in elements ){
   
   // If array element have a branch then try to switch tap up. If transformer is on it's last tap then change it down. 
   if( elements[ i ][ 2 ] ){
+
+    elementType = "Unknown Transformer";
+
+    switch( element.Typ ){
+
+      case 11: elementType = "wo regulation Transformer"; break;
+      case 12: elementType = "w U-regulation Transformer"; break;
+      case 13: elementType = "w P-regulation Transformer"; break;
+      case 14: elementType = "Block Transformer"; break;
+      case 15: elementType = "w P-regulation symetric Transformer"; break;
+    }
     
     elementBaseValue = element.Stp0;
 
@@ -128,6 +128,25 @@ for( i in elements ){
   // Get set value from config file and add it to node's voltage  
   else{ 
     
+    elementType = "Unknown Generator";
+
+    switch( element.Typ ){
+
+      case 2: elementType = "JWCDc Generator"; break;
+      case 3: elementType = "JWCDp Generator"; break;
+      case 4: elementType = "JWCKc Generator"; break;
+      case 5: elementType = "JWCKw Generator"; break;
+      case 6: elementType = "JWCKp Generator"; break;
+      case 7: elementType = "MC Generator"; break;
+      case 8: elementType = "PR Generator"; break;
+      case 9: elementType = "MW Generator"; break;
+      case 10: elementType = "MF Generator"; break;
+      case 11: elementType = "Other Generator"; break;
+      case 12: elementType = "JWCKf Generator"; break;
+      case 13: elementType = "PV Generator"; break;
+      case 14: elementType = "JWCKpv Generator"; break;
+    }
+
     elementBaseValue = roundTo( node.Vs , config.roundingPrecision );
     
     node.Vs += config.changeValue;
@@ -139,7 +158,7 @@ for( i in elements ){
   }
   
   // Write element's name, it's difference of connected node power / tap number to base
-  buffer = strip( element.Name ) + ";" + difference + ";";
+  buffer = strip( element.Name ) + ";" + difference + ";" + elementType + ";";
 
   // Write for each element it's new reactive power
   for( j in elements ){
@@ -153,7 +172,7 @@ for( i in elements ){
   resultFiles[ 4 ].WriteLine( removeLastChar( buffer ) );
 
   // Write element's name, it's difference of connected node power / tap number to base
-  buffer = strip( element.Name ) + ";" + difference + ";";
+  buffer = strip( element.Name ) + ";" + difference + ";" + elementType + ";";
 
   // Write for each node it's new voltage
   for( j in nodes ) buffer += roundTo( nodes[ j ].Vi - baseNodesVolt[ j ], config.roundingPrecision ) + ";";
@@ -179,6 +198,31 @@ resultFiles[5].Close();
 var duration = getTime() - time;
 MsgBox( "Task completed in " + formatTime( duration ), 0 | 64, "Task completed" );
 
+
+// Loads the model from the specified path and name.
+// The model path and name is split into a file extension, and the correct
+// read function is called based on the file extension. 
+function loadModel( modelPath, modelName ) {
+
+  var model = modelPath + "\\" + modelName;
+
+  // Get the file extension from the model name
+  var fileExtension = strip( modelName.split( "." )[ 1].toLowerCase() );
+ 
+  // Call the correct read function based on the file extension
+  switch( fileExtension ){
+
+    case "kdm": ReadDataKDM( model ); break;
+    case "uzp": ReadDataUZP( model ); break;
+    case "ien": ReadDataIEN( model ); break;
+    case "bin": ReadDataBIN( model ); break;
+    case "epc": ReadDataEPC( model ); break;
+    case "pti": ReadDataPTI( model ); break;
+    case "ucte": ReadDataUCTE( model ); break;
+    default: errorThrower( "Unsupported file format" ); 
+  }
+
+}
 
 //  Saves information about the model, including power flow calculation settings
 //  to the specified file.
@@ -214,14 +258,23 @@ function saveModelInfoToFile( file, config ) {
     // Model information
     "Model: " + Data.FileName + "\n" +
     "Format: " + format + "\n" +
-
+    "Date: " + getCurrentDate() + "\n\n" +
     // Power flow calculation settings
     "Power flow settings:\n" +
     "Method: " + method + "\n" +
     "Max iterations: " + config.maxIterations + "\n" +
     "Starting precision: " + config.startingPrecision + "\n" +
     "Precision: " + config.precision + "\n" +
-    "Uzg iteration precision: " + config.uzgIterationPrecision
+    "Uzg iteration precision: " + config.uzgIterationPrecision + "\n\n" +
+    // Variable settings
+    "Variable settings:\n" +
+    "Area: " + config.areaId + "\n" +
+    "Min rated voltage: " + config.minRatedVoltage + "\n" +
+    "Node char index: " + config.nodeCharIndex + "\n" +
+    "Node char: " + config.nodeChar + "\n" +
+    "Change value: " + config.changeValue + "\n" +
+    "Skip fake nodes: " + config.skipFakeNodes + "\n" +
+    "Skip generators connected to nodes type one: " + config.skipGeneratorsConnectedToNodesTypeOne + "\n"
   );
 
   // Close the file
@@ -547,7 +600,7 @@ function removeLastChar( string ) {
 function writeDataToFile( file, objectArray ) {
 
   // Create buffer string with column names
-  var buffer = "Elements;U_G/Tap Difference;"
+  var buffer = "Elements;U_G/Tap Difference;Element Type;";
 
   // Loop through each object in the array and add it's name to the buffer string
   for( i in objectArray ){
