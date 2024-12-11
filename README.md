@@ -2,7 +2,7 @@
 
 Overview
 
-This project is a macro script written in JavaScript that retrieves node names from an input file, searches for connected transformers and generators, and writes original values to output files. It then updates generator voltages and transformer taps, recalculates values, and writes the results to output files.
+This project is a macro script written in JavaScript that retrieves node names from an input file, searches for connected transformers and generators. It then updates generator voltages and transformer taps, recalculates values, and writes the results to output files.
 
 
 Configuration
@@ -21,8 +21,9 @@ The input file (input.txt) contains a list of node names to search for, separate
 
 
 Output Files
-The script generates six output files:
+The script generates seven output files:
 
+  * Information file
   * Areas file
   * Nodes file
   * Generators file

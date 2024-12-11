@@ -33,7 +33,6 @@ var config = iniConfigConstructor( configurationFileLocation, fso );
 var tmpFile = config.homeFolder + "\\tmp.bin", tmpOgFile = config.homeFolder + "\\tmpOrg.bin";
 
 // Load the KDM model file and save it as a temporary binary file
-//ReadDataKDM( config.modelPath + "\\" + config.modelName );
 loadModel( config.modelPath, config.modelName );
 if( SaveTempBIN( tmpOgFile ) < 1 ) errorThrower( "Unable to create temporary file" );
 
@@ -55,8 +54,6 @@ var inputArray = getInputArray( inputFile );
 inputFile.close();
 
 // Create result files and folder using settings from a config file
-//var resultFiles = [ createFile( "nodes", config, fso ), createFile( "generators", config, fso ), 
-//createFile( "transformers", config, fso ), createFile( "q", config, fso ), createFile( "v", config, fso ) ];
 var resultFiles = [ createFile( "areas", "csv", config, fso ), createFile( "nodes", "csv", config, fso ), createFile( "generators", "csv", config, fso ), 
   createFile( "transformers", "csv", config, fso ), createFile( "q", "csv", config, fso ), createFile( "v", "csv", config, fso ) ];
   
@@ -66,17 +63,17 @@ saveModelInfoToFile( createFile( "info", "txt", config, fso ), config );
 // Saves areas with coresponding data to file
 saveAreasToFile( resultFiles[ 0 ], config );
 
-// Fills node file ( resultFiles[ 0 ] ) with valid nodes
+// Fills node file ( resultFiles[ 1 ] ) with valid nodes
 // Also fills nodes array with nodes that were written to the file and 
 // baseNodesVolt with the base voltage of the nodes
 fillNodesArrays(  nodes, baseNodesVolt, inputArray, resultFiles[ 1 ], config );
 
-// Fills generator file ( resultFiles[ 1 ] ) with valid generators and their connected nodes
+// Fills generator file ( resultFiles[ 2 ] ) with valid generators and their connected nodes
 // Add valid generators to arrays with coresponding node and
 // baseElementsReactPow with generators reactive power
 fillGeneratorsArrays( elements, baseElementsReactPow, inputArray, resultFiles[ 2 ], config );
 
-// Fills transformer file ( resultFiles[ 2 ] ) with valid transformers and connected nodes
+// Fills transformer file ( resultFiles[ 3 ] ) with valid transformers and connected nodes
 // Add valid transformers to arrays with coresponding node and branch and
 // baseElementsReactPow with transformers reactive power
 fillTransformersArrays( elements, nodes, baseElementsReactPow, resultFiles[ 3 ], config );
@@ -530,7 +527,6 @@ function errorThrower( message ) {
 function CPF() {
 
   if (CalcLF() !== 1) throw new Error("Power flow calculation failed");
-  
 }
 
 // Calls built-in power flow calculation function, throws error if it fails, then tries to load original model
