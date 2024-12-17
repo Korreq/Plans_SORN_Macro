@@ -54,35 +54,37 @@ var inputArray = getInputArray( inputFile );
 inputFile.close();
 
 // Create result files and folder using settings from a config file
-var resultFiles = [ createFile( "areas", "csv", config, fso ), createFile( "nodes", "csv", config, fso ), createFile( "generators", "csv", config, fso ), 
-  createFile( "transformers", "csv", config, fso ), createFile( "q", "csv", config, fso ), createFile( "v", "csv", config, fso ) ];
+var resultFiles = [ createFile( "info", "txt", config, fso ), createFile( "areas", "csv", config, fso ), 
+createFile( "nodes", "csv", config, fso ), createFile( "generators", "csv", config, fso ), 
+createFile( "transformers", "csv", config, fso ), createFile( "q", "csv", config, fso ), 
+createFile( "v", "csv", config, fso ) ];
   
-// Save model info to file
-saveModelInfoToFile( createFile( "info", "txt", config, fso ), config );
+// Fills model info file ( resultFiles[ 0 ] ) with model info from configuration file and plans  
+saveModelInfoToFile( resultFiles[ 0 ], config );
 
-// Saves areas with coresponding data to file
-saveAreasToFile( resultFiles[ 0 ], config );
+// Fills area file ( resultFiles[ 1 ] ) with areas from the model
+saveAreasToFile( resultFiles[ 1 ], config );
 
-// Fills node file ( resultFiles[ 1 ] ) with valid nodes
+// Fills node file ( resultFiles[ 2 ] ) with valid nodes
 // Also fills nodes array with nodes that were written to the file and 
 // baseNodesVolt with the base voltage of the nodes
-fillNodesArrays(  nodes, baseNodesVolt, inputArray, resultFiles[ 1 ], config );
+fillNodesArrays(  nodes, baseNodesVolt, inputArray, resultFiles[ 2 ], config );
 
-// Fills generator file ( resultFiles[ 2 ] ) with valid generators and their connected nodes
+// Fills generator file ( resultFiles[ 3 ] ) with valid generators and their connected nodes
 // Add valid generators to arrays with coresponding node and
 // baseElementsReactPow with generators reactive power
-fillGeneratorsArrays( elements, baseElementsReactPow, inputArray, resultFiles[ 2 ], config );
+fillGeneratorsArrays( elements, baseElementsReactPow, inputArray, resultFiles[ 3 ], config );
 
-// Fills transformer file ( resultFiles[ 3 ] ) with valid transformers and connected nodes
+// Fills transformer file ( resultFiles[ 4 ] ) with valid transformers and connected nodes
 // Add valid transformers to arrays with coresponding node and branch and
 // baseElementsReactPow with transformers reactive power
-fillTransformersArrays( elements, nodes, baseElementsReactPow, resultFiles[ 3 ], config );
+fillTransformersArrays( elements, nodes, baseElementsReactPow, resultFiles[ 4 ], config );
 
 // Writes to file headers and elements name
-writeDataToFile( resultFiles[ 4 ], elements );
+writeDataToFile( resultFiles[ 5 ], elements );
 
 // Writes to file headers and nodes name
-writeDataToFile( resultFiles[ 5 ], nodes );
+writeDataToFile( resultFiles[ 6 ], nodes );
 
 // Trying to save file before any change on transformers and connected nodes
 if( SaveTempBIN( tmpFile ) < 1 ) errorThrower( "Unable to create temporary file" );
@@ -101,6 +103,7 @@ for( i in elements ){
 
     elementType = "Unknown Transformer";
 
+    // Write transformer's type by its number
     switch( element.Typ ){
 
       case 11: elementType = "wo regulation Transformer"; break;
@@ -127,6 +130,7 @@ for( i in elements ){
     
     elementType = "Unknown Generator";
 
+    // Write generator's type by its number
     switch( element.Typ ){
 
       case 2: elementType = "JWCDc Generator"; break;
@@ -144,7 +148,7 @@ for( i in elements ){
       case 14: elementType = "JWCKpv Generator"; break;
     }
 
-    elementBaseValue = roundTo( node.Vs , config.roundingPrecision );
+    elementBaseValue = roundTo( node.Vs, config.roundingPrecision );
     
     node.Vs += config.changeValue;
 
@@ -166,14 +170,14 @@ for( i in elements ){
     buffer += roundTo( react - baseElementsReactPow[ j ], config.roundingPrecision ) + ";";
   }
   
-  resultFiles[ 4 ].WriteLine( removeLastChar( buffer ) );
+  resultFiles[ 5 ].WriteLine( removeLastChar( buffer ) );
 
   // Write element's name, it's difference of connected node power / tap number to base
   buffer = strip( element.Name ) + ";" + difference + ";" + elementType + ";";
 
   // Write for each node it's new voltage
   for( j in nodes ) buffer += roundTo( nodes[ j ].Vi - baseNodesVolt[ j ], config.roundingPrecision ) + ";";
-  resultFiles[ 5 ].WriteLine( removeLastChar( buffer ) );
+  resultFiles[ 6 ].WriteLine( removeLastChar( buffer ) );
 
   // Load model without any changes to transformators
   ReadTempBIN( tmpFile );
@@ -186,14 +190,15 @@ fso.DeleteFile( tmpFile );
 fso.DeleteFile( tmpOgFile );
 
 // Close the result files to release resources
-resultFiles[4].Close();
 resultFiles[5].Close();
+resultFiles[6].Close();
 
 // Calculate and display the program's working duration.
 // Note: The working duration calculation does not account for cases where the program 
 // starts and ends on different days due to the lack of date handling.
 var duration = getTime() - time;
 MsgBox( "Task completed in " + formatTime( duration ), 0 | 64, "Task completed" );
+
 
 
 // Loads the model from the specified path and name.
@@ -572,7 +577,6 @@ function isStringMatchingRegexArray( string, regexArray ) {
   // If no regex matches, return false
   return false;
 }
-
 
 // Function takes a 2D array and an element name.
 // It iterates through the array and checks if the name of any element matches the given element name.
