@@ -276,7 +276,8 @@ function saveModelInfoToFile( file, config ) {
     "Node char: " + config.nodeChar + "\n" +
     "Change value: " + config.changeValue + "\n" +
     "Skip fake nodes: " + config.skipFakeNodes + "\n" +
-    "Skip generators connected to nodes type one: " + config.skipGeneratorsConnectedToNodesTypeOne + "\n"
+    "Skip generators connected to nodes type one: " + config.skipGeneratorsConnectedToNodesTypeOne + "\n" +
+    "Skip generators without transformers: " + config.skipGeneratorsWithoutTransformers
   );
 
   // Close the file
