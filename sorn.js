@@ -25,6 +25,14 @@ var configurationFileLocation = "Z:\\home\\yoga\\Documents\\Github\\Plans_SORN_M
     - skipGeneratorsWithoutTransformers: Exclude generators without directly connected transformers
 */
 
+/*
+
+  Add Connected node to generators, transformers in Q and V files 
+  Generators have connected node and directly connected node
+  transformers have both connected nodes
+
+*/ 
+
 // Create a file system object for file operations
 var fso = new ActiveXObject( "Scripting.FileSystemObject" );
 
@@ -59,9 +67,6 @@ createFile( "nodes", "csv", config, fso ), createFile( "generators", "csv", conf
 createFile( "transformers", "csv", config, fso ), createFile( "q", "csv", config, fso ), 
 createFile( "v", "csv", config, fso ) ];
   
-// Fills model info file ( resultFiles[ 0 ] ) with model info from configuration file and plans  
-saveModelInfoToFile( resultFiles[ 0 ], config );
-
 // Fills area file ( resultFiles[ 1 ] ) with areas from the model
 saveAreasToFile( resultFiles[ 1 ], config );
 
@@ -199,7 +204,8 @@ resultFiles[6].Close();
 var duration = getTime() - time;
 MsgBox( "Task completed in " + formatTime( duration ), 0 | 64, "Task completed" );
 
-
+// Fills model info file ( resultFiles[ 0 ] ) with model info from configuration file and plans  
+saveModelInfoToFile( resultFiles[ 0 ], config, duration );
 
 // Loads the model from the specified path and name.
 // The model path and name is split into a file extension, and the correct
@@ -228,7 +234,7 @@ function loadModel( modelPath, modelName ) {
 
 //  Saves information about the model, including power flow calculation settings
 //  to the specified file.
-function saveModelInfoToFile( file, config ) {
+function saveModelInfoToFile( file, config, duration ) {
 
   var format = method = "Unknown";
 
@@ -260,7 +266,8 @@ function saveModelInfoToFile( file, config ) {
     // Model information
     "Model: " + Data.FileName + "\n" +
     "Format: " + format + "\n" +
-    "Date: " + getCurrentDate() + "\n\n" +
+    "Date: " + getCurrentDate() + "\n" +
+    "Duration: " + formatTime( duration ) + "\n\n" +
     // Power flow calculation settings
     "Power flow settings:\n" +
     "Method: " + method + "\n" +
