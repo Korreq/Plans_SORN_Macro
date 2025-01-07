@@ -25,14 +25,6 @@ var configurationFileLocation = "Z:\\home\\yoga\\Documents\\Github\\Plans_SORN_M
     - skipGeneratorsWithoutTransformers: Exclude generators without directly connected transformers
 */
 
-/*
-
-  Add Connected node to generators, transformers in Q and V files 
-  Generators have connected node and directly connected node
-  transformers have both connected nodes
-
-*/ 
-
 // Create a file system object for file operations
 var fso = new ActiveXObject( "Scripting.FileSystemObject" );
 
@@ -73,7 +65,7 @@ saveAreasToFile( resultFiles[ 1 ], config );
 // Fills node file ( resultFiles[ 2 ] ) with valid nodes
 // Also fills nodes array with nodes that were written to the file and 
 // baseNodesVolt with the base voltage of the nodes
-fillNodesArrays(  nodes, baseNodesVolt, inputArray, resultFiles[ 2 ], config );
+fillNodesArrays( nodes, baseNodesVolt, inputArray, resultFiles[ 2 ], config );
 
 // Fills generator file ( resultFiles[ 3 ] ) with valid generators and their connected nodes
 // Add valid generators to arrays with coresponding node and
@@ -95,16 +87,19 @@ writeDataToFile( resultFiles[ 6 ], nodes );
 if( SaveTempBIN( tmpFile ) < 1 ) errorThrower( "Unable to create temporary file" );
 
 // Initialize variables
-var element = node = elementBaseValue = difference = buffer = elementType = null;
+var element = node = mainNode = secondaryNode = elementBaseValue = difference = buffer = elementType = null;
+var id = 0;
 
 // For each element make some change depending on type of elemenet, then write results into result files
 for( i in elements ){ 
   
-  // Get the element and the connected node
-  element = elements[ i ][ 0 ], node = elements[ i ][ 1 ];
+  // Get the element
+  element = elements[ i ][ 0 ];
   
   // If array element have a branch then try to switch tap up. If transformer is on it's last tap then change it down. 
   if( elements[ i ][ 2 ] ){
+
+    mainNode = element.BegName, secondaryNode = element.EndName;
 
     elementType = "Unknown Transformer";
 
@@ -132,6 +127,9 @@ for( i in elements ){
 
   // Get set value from config file and add it to node's voltage  
   else{ 
+
+    node = elements[ i ][ 1 ], mainNode = node.Name, secondaryNode = element.NodName;
+
     
     elementType = "Unknown Generator";
 
@@ -164,7 +162,7 @@ for( i in elements ){
   }
   
   // Write element's name, it's difference of connected node power / tap number to base
-  buffer = strip( element.Name ) + ";" + difference + ";" + elementType + ";";
+  buffer = id + ";" + strip( element.Name ) + ";" + difference + ";" + elementType + ";" + strip( mainNode ) + ";" + strip( secondaryNode ) + ";";
 
   // Write for each element it's new reactive power
   for( j in elements ){
@@ -178,11 +176,13 @@ for( i in elements ){
   resultFiles[ 5 ].WriteLine( removeLastChar( buffer ) );
 
   // Write element's name, it's difference of connected node power / tap number to base
-  buffer = strip( element.Name ) + ";" + difference + ";" + elementType + ";";
+  buffer = id + ";" + strip( element.Name ) + ";" + difference + ";" + elementType + ";" + strip( mainNode ) + ";" + strip( secondaryNode ) + ";";
 
   // Write for each node it's new voltage
   for( j in nodes ) buffer += roundTo( nodes[ j ].Vi - baseNodesVolt[ j ], config.roundingPrecision ) + ";";
   resultFiles[ 6 ].WriteLine( removeLastChar( buffer ) );
+
+  id++;
 
   // Load model without any changes to transformators
   ReadTempBIN( tmpFile );
@@ -365,23 +365,23 @@ function fillNodesArrays( nodesArray, baseNodesVoltageArray, inputArray, file, c
 function fillGeneratorsArrays( elementsArray, baseElementsReactPowerArray, inputArray, file, config ) {
 
   // Write headers to the file
-  var buffer = "name;min_active_power;current_active_power;max_active_power;min_reactive_power;current_reactive_power;max_reactive_power;connected_node;zone\n";
-  var element, node, branch;
+  var buffer = "name;min_active_power;current_active_power;max_active_power;min_reactive_power;current_reactive_power;max_reactive_power;main_node;direct_node;zone\n";
+  var element, mainNode, branch;
 
   // Loop through all generators in the project
   for (var i = 1; i < Data.N_Gen; i++) {
 
     // Get generator and node that it's connected to
-    element = GenArray.Get(i), node = NodArray.Get(element.NrNod);
+    element = GenArray.Get(i), mainNode = NodArray.Get(element.NrNod);
 
     // Skip generators connected to type 1 nodes if specified in config
-    if (config.skipGeneratorsConnectedToNodesTypeOne && node.Typ === 1) continue;
+    if (config.skipGeneratorsConnectedToNodesTypeOne && mainNode.Typ === 1) continue;
 
     // If generator is connected to a transformer, get the transformer and its connected node
     if (element.TrfName) {
     
       branch = BraArray.Find(element.TrfName);
-      node = (node.Name === branch.EndName) ? NodArray.Find(branch.BegName) : NodArray.Find(branch.EndName);
+      mainNode = (mainNode.Name === branch.EndName) ? NodArray.Find(branch.BegName) : NodArray.Find(branch.EndName);
     } 
     
     // Skip generators without transformers if specified in config
@@ -391,8 +391,8 @@ function fillGeneratorsArrays( elementsArray, baseElementsReactPowerArray, input
     if (
       element.Qmin < element.Qmax && // Reactive power constraints
       element.St > 0 && // Generator is connected 
-      ( node.Area === config.areaId || config.areaId <= 0 ) && // Area constraint
-      isStringMatchingRegexArray( strip( node.Name ), inputArray ) // Name matching
+      ( mainNode.Area === config.areaId || config.areaId <= 0 ) && // Area constraint
+      isStringMatchingRegexArray( strip( mainNode.Name ), inputArray ) // Name matching
     ) {
      
       // Write generator information to file
@@ -403,11 +403,12 @@ function fillGeneratorsArrays( elementsArray, baseElementsReactPowerArray, input
       roundTo( element.Qmin, config.roundingPrecision ) + ";" + 
       roundTo( element.Qg, config.roundingPrecision ) + ";" + 
       roundTo( element.Qmax, config.roundingPrecision ) + ";" + 
-      strip( node.Name ) + ";" +
-      node.Zone + "\n";
+      strip( mainNode.Name ) + ";" +
+      strip( element.NodName ) + ";" +
+      mainNode.Zone + "\n";
    
       // Add generator to elements array and set its reactive power in baseElementsReactPowerArray
-      elementsArray.push( [ element, node ] );
+      elementsArray.push( [ element, mainNode ] );
       baseElementsReactPowerArray.push( element.Qg );  
     }
   }
@@ -555,7 +556,6 @@ function sCPF( backupFile ) {
 
 // Function takes string and returns it without whitespaces
 function strip( string ) {
-
   // Remove leading and trailing whitespaces
   return string.replace(/(^\s+|\s+$)/g, '');
 }
@@ -608,7 +608,7 @@ function removeLastChar( string ) {
 function writeDataToFile( file, objectArray ) {
 
   // Create buffer string with column names
-  var buffer = "Elements;U_G/Tap Difference;Element Type;";
+  var buffer = "ID;Elements;U_G/Tap Difference;Element Type;Beg Node/Changed Node;End Node/Direct Node;";
 
   // Loop through each object in the array and add it's name to the buffer string
   for( i in objectArray ){
