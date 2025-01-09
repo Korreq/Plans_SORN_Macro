@@ -425,7 +425,7 @@ function fillGeneratorsArrays( elementsArray, baseElementsReactPowerArray, input
 function fillTransformersArrays( elements, nodes, baseElementsReactPowerArray, file, config ) {
 
   // Write headers to the file
-  file.WriteLine( "name;min_tap;current_tap;max_tap;regulation_step;begining_node;ending_node;zone" );
+  file.WriteLine( "name;min_tap;current_tap;max_tap;regulation_step;tap_position;begining_node;ending_node;zone" );
   var node, transformer, branch;
 
   // Loop through all nodes in the nodes array
@@ -444,26 +444,19 @@ function fillTransformersArrays( elements, nodes, baseElementsReactPowerArray, f
         // Check if the transformer's node name contains the specified character
         transformer.EndName.charAt( config.nodeCharIndex ) != config.nodeChar && 
         // Check if the transformer's node name contains the specified character
-        transformer.BegName.charAt( config.nodeCharIndex )!= config.nodeChar && 
+        transformer.BegName.charAt( config.nodeCharIndex ) != config.nodeChar && 
         // Check if the transformer is not already in the elements array
         !isElementInArrayByName( elements, transformer.Name ) && transformer.Lstp > 1 && 
         // Check if the transformer's rated voltages are higher than the specified minimum
         transformer.Vn2 >= config.minRatedVoltage && transformer.Vn1 >= config.minRatedVoltage
       ){
 
-        // If transformer is on it's last tap then minTap is set to 1 and maxTap is set to number of taps
-        // If not then minTap is set to number of taps and maxTap is set to 1
-        var minTap = maxTap = null;
-
-        // Set minTap and maxTap based on the transformer's tap position
-        if( transformer.TapLoc === 1 ){ minTap = 1, maxTap = transformer.Lstp; }
-
-        else{ minTap = transformer.Lstp, maxTap = 1 }
-
-        // Write to file transformer's name, current tap, min tap, max tap, tap regulation step and connected node
-        file.WriteLine( strip( transformer.name ) + ";" + minTap + ";" + transformer.Stp0 + ";" + 
-        maxTap + ";" + roundTo( transformer.dUstp, config.roundingPrecision ) + ";" + 
-        strip( transformer.BegName ) + ";" + strip( transformer.EndName ) + ";" + node.Zone );
+        // Write to file transformer's name, min tap, current tap max tap, tap regulation step, 
+        // tap position, begining node, ending node and zone
+        file.WriteLine( strip( transformer.name ) + ";1;" + transformer.Stp0 + ";" + 
+        transformer.Lstp + ";" + roundTo( transformer.dUstp, config.roundingPrecision ) + ";" + 
+        transformer.TapLoc + ";" + strip( transformer.BegName ) + ";" + 
+        strip( transformer.EndName ) + ";" + node.Zone );
         
         // Get the branch connected to the transformer
         branch = BraArray.Get( transformer.NrBra );
